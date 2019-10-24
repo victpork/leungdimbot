@@ -86,7 +86,7 @@ func UpdateShopInfo(shops []Shop) error {
 
 //NearestShops retrieves nearest shops with provided geohash
 func NearestShops(geohash string) ([]Shop, error) {
-	rows, err := DB.Query("SELECT shop_id, name, type, coalesce(address, ''), coalesce(url,''), tags, geohash FROM shops WHERE LEFT(geohash, 6) = $1 ORDER BY geohash",
+	rows, err := DB.Query("SELECT shop_id, name, type, coalesce(address, ''), coalesce(url,''), tags, geohash, district FROM shops WHERE LEFT(geohash, 6) = $1 ORDER BY geohash",
 		geohash)
 	if err != nil {
 		return nil, err
@@ -95,7 +95,7 @@ func NearestShops(geohash string) ([]Shop, error) {
 	shoplist := make([]Shop, 0)
 	for rows.Next() {
 		shop := Shop{}
-		rows.Scan(&shop.ID, &shop.Name, &shop.Type, &shop.Address, &shop.URL, pq.Array(&shop.Tags), &shop.Geohash)
+		rows.Scan(&shop.ID, &shop.Name, &shop.Type, &shop.Address, &shop.URL, pq.Array(&shop.Tags), &shop.Geohash, &shop.District)
 		shoplist = append(shoplist, shop)
 	}
 	return shoplist, nil
