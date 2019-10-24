@@ -1,7 +1,7 @@
 package wongdim
 
 import (
-	"database/sql"
+	"github.com/jackc/pgx/v4"
 	"equa.link/wongdim/dao"
 	"equa.link/wongdim/batch"
 	geohash "github.com/TomiHiltunen/geohash-golang"
@@ -75,9 +75,9 @@ func WithTelegramAPIKey(key string, debug bool) Option {
 }
 
 // WithDatabase configures bot with backend database
-func WithDatabase(db *sql.DB) Option {
+func WithDatabase(db *pgx.Conn) Option {
 	return func(s *ServeBot) error {
-		dao.DB = db
+		dao.Conn = db
 		return nil
 	}
 }
@@ -113,7 +113,7 @@ func (r *ServeBot) Listen() error {
 	http.HandleFunc("/fillInfo", func(writer http.ResponseWriter, req *http.Request) {
 		ctx := context.Background()
 		
-		errCh := batch.Run(ctx, dao.DB, r.mapClient.FillGeocode)
+		errCh := batch.Run(ctx, dao.Conn, r.mapClient.FillGeocode)
 
 		go func() {
 			for e := range errCh {
@@ -149,7 +149,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 			result := make([]interface{}, 0, len(shops))
 			for i := range shops {
 				box:= geohash.Decode(shops[i].Geohash)
-				
+
 				r := tgbotapi.NewInlineQueryResultLocation(
 					update.InlineQuery.Query + strconv.Itoa(shops[i].ID), shops[i].String(), box.Center().Lat(),box.Center().Lng())
 				r.InputMessageContent = tgbotapi.InputVenueMessageContent{

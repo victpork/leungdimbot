@@ -2,10 +2,10 @@ package batch
 
 import (
 	"context"
-	"database/sql"
 	"equa.link/wongdim/dao"
 	"errors"
 	ghash "github.com/TomiHiltunen/geohash-golang"
+	"github.com/jackc/pgx/v4"
 	"golang.org/x/sync/errgroup"
 	"googlemaps.github.io/maps"
 	"log"
@@ -16,7 +16,7 @@ var (
 	//GeocodeAPITimeout is the timeout value for Google Geocode API timeout
 	GeocodeAPITimeout time.Duration = 3 * time.Second
 	gCodeFunc         Processor
-	db                *sql.DB
+	conn              *pgx.Conn
 )
 
 //GeocodeClient takes shop name and district, query Google Map Geocode API, and
@@ -72,9 +72,9 @@ func (gc GeocodeClient) FillGeocode(ctx context.Context, shop dao.Shop) (dao.Sho
 }
 
 //Run is a batch function that fill missing geohash, addresses, tags into shop info and save to DB
-func Run(ctx context.Context, dbConn *sql.DB, geoCodeAPI Processor) <-chan error {
+func Run(ctx context.Context, dbConn *pgx.Conn, geoCodeAPI Processor) <-chan error {
 	gCodeFunc = geoCodeAPI
-	db = dbConn
+	conn = dbConn
 	errCh := make(chan error)
 	go batchController(ctx, errCh)
 	return errCh
@@ -110,7 +110,7 @@ func batchController(ctx context.Context, errCh chan<- error) {
 				if s0.Geohash == "" {
 					s1, err = gCodeFunc(ctx, s0)
 					log.Printf("Updated %s with address %s and geohash %s", s1.Name, s1.Address, s1.Geohash)
-				} 
+				}
 				if err != nil {
 					// Since returning error would kill the group, we push error to the
 					// channel instead. Also we skip processing
@@ -126,12 +126,12 @@ func batchController(ctx context.Context, errCh chan<- error) {
 						return ctx.Err()
 					}
 				}
-				
+
 			}
 			return nil
 		})
 	}
-	
+
 	go func() {
 		grp.Wait()
 		close(resultCh)
@@ -146,9 +146,10 @@ func batchController(ctx context.Context, errCh chan<- error) {
 	if err != nil {
 		errCh <- err
 	}
-	err = dao.UpdateTags()
+	res, err := dao.UpdateTags()
 	if err != nil {
 		errCh <- err
 	}
+	log.Printf("%d rows updated tags", res)
 	close(errCh)
 }

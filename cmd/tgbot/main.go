@@ -1,16 +1,15 @@
 package main
 
 import (
-	"database/sql"
 	"equa.link/wongdim"
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgx/v4"
 	"github.com/spf13/viper"
 	"log"
 	"fmt"
+	"context"
 )
 
 func init() {
-	viper.SetDefault("backendType", "postgreSQL")
 	viper.SetDefault("tg.debug", false)
 }
 
@@ -32,7 +31,7 @@ func main() {
 		viper.Get("db.user"),
 		viper.Get("db.password"),
 		viper.Get("db.db"))
-	db, err := sql.Open("postgres", dbConnStr)
+	db, err := pgx.Connect(context.Background(), dbConnStr)
 	if err != nil {
 		log.Fatal("Could not connect to database", err)
 	}

@@ -1,9 +1,9 @@
 package dao
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
-	"github.com/lib/pq"
+	"github.com/jackc/pgx/v4"
 	"log"
 )
 
@@ -20,8 +20,8 @@ type Shop struct {
 }
 
 var (
-	//DB is the database connection
-	DB *sql.DB
+	//Conn is the database connection
+	Conn *pgx.Conn
 )
 
 func (s Shop) String() string {
@@ -30,7 +30,7 @@ func (s Shop) String() string {
 
 //CreateTable create necessary table for storing shop records
 func CreateTable() error {
-	_, err := DB.Exec(`CREATE TABLE public.shops
+	_, err := Conn.Exec(context.Background(), `CREATE TABLE public.shops
 	(
 		shop_id SERIAL NOT NULL,
 		name character varying(50) NOT NULL,
@@ -48,7 +48,8 @@ func CreateTable() error {
 
 //ShopMissingInfo get data with missing info
 func ShopMissingInfo() ([]Shop, error) {
-	rows, err := DB.Query("SELECT shop_id, name, district, coalesce(address, ''), coalesce(geohash, ''), type FROM shops WHERE geohash IS NULL OR tags IS NULL")
+	rows, err := Conn.Query(context.Background(),
+		"SELECT shop_id, name, district, coalesce(address, ''), coalesce(geohash, ''), type FROM shops WHERE geohash IS NULL OR tags IS NULL")
 	if err != nil {
 		return nil, err
 	}
@@ -64,29 +65,30 @@ func ShopMissingInfo() ([]Shop, error) {
 
 //UpdateShopInfo fill missing info into shops
 func UpdateShopInfo(shops []Shop) error {
-	tx, err := DB.Begin()
+	tx, err := Conn.Begin(context.Background())
 	if err != nil {
 		return err
 	}
-	stmt, err := DB.Prepare("UPDATE shops SET address = $1, geohash = $2 WHERE shop_id = $3")
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
+	var rowsAffected int64 = 0
 	for _, shop := range shops {
-		_, err = stmt.Exec(shop.Address, shop.Geohash, shop.ID)
+		cmdTag, err := Conn.Exec(context.Background(),
+			"UPDATE shops SET address = $1, geohash = $2 WHERE shop_id = $3",
+			shop.Address, shop.Geohash, shop.ID)
 		if err != nil {
 			log.Printf("[ERR] %e", err)
 			return err
 		}
+		rowsAffected += cmdTag.RowsAffected()
 	}
-	err = tx.Commit()
+
+	tx.Commit(context.Background())
 	return err
 }
 
 //NearestShops retrieves nearest shops with provided geohash
 func NearestShops(geohash string) ([]Shop, error) {
-	rows, err := DB.Query("SELECT shop_id, name, type, coalesce(address, ''), coalesce(url,''), tags, geohash, district FROM shops WHERE LEFT(geohash, 6) = $1 ORDER BY geohash",
+	rows, err := Conn.Query(context.Background(),
+		"SELECT shop_id, name, type, coalesce(address, ''), coalesce(url,''), geohash, district FROM shops WHERE LEFT(geohash, 6) = $1 ORDER BY geohash",
 		geohash)
 	if err != nil {
 		return nil, err
@@ -95,7 +97,7 @@ func NearestShops(geohash string) ([]Shop, error) {
 	shoplist := make([]Shop, 0)
 	for rows.Next() {
 		shop := Shop{}
-		rows.Scan(&shop.ID, &shop.Name, &shop.Type, &shop.Address, &shop.URL, pq.Array(&shop.Tags), &shop.Geohash, &shop.District)
+		rows.Scan(&shop.ID, &shop.Name, &shop.Type, &shop.Address, &shop.URL, &shop.Geohash, &shop.District)
 		shoplist = append(shoplist, shop)
 	}
 	return shoplist, nil
@@ -103,9 +105,10 @@ func NearestShops(geohash string) ([]Shop, error) {
 
 //ShopsWithTags returns shops with tags provided
 func ShopsWithTags(tags []string) ([]Shop, error) {
-	rows, err := DB.Query(`SELECT shop_id, name, type, address, coalesce(url,''), geohash, district 
+	rows, err := Conn.Query(context.Background(), `SELECT shop_id, name, type, address, 
+	coalesce(url,''), geohash, district 
 	FROM shops WHERE (tags @> $1 OR name ILIKE '%'||$2||'%') and address IS NOT NULL`,
-		pq.Array(tags), tags[0])
+		tags, tags[0])
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +127,7 @@ func ShopsWithTags(tags []string) ([]Shop, error) {
 
 //ShopCount returns the number of shops stored in system
 func ShopCount() (int, error) {
-	r := DB.QueryRow("SELECT count(*) FROM shops")
+	r := Conn.QueryRow(context.Background(), "SELECT count(*) FROM shops")
 	var cnt int
 	err := r.Scan(&cnt)
 	if err != nil {
@@ -134,22 +137,18 @@ func ShopCount() (int, error) {
 }
 
 //UpdateTags set keywords for searching for the shops
-func UpdateTags() error {
-	stmt, err := DB.Prepare("update shops set tags = array[district,type] where tags is null")
+func UpdateTags() (int, error) {
+	ctag, err := Conn.Exec(context.Background(), "update shops set tags = array[district,type] where tags is null")
 	if err != nil {
-		return err
+		return -1, err
 	}
-	defer stmt.Close()
-	_, err = stmt.Exec()
-	if err != nil {
-		return err
-	}
-	return nil
+	return int(ctag.RowsAffected()), nil
 }
 
 //ShopByID returns shop by internal ID
 func ShopByID(shopID int) (Shop, error) {
-	r := DB.QueryRow("SELECT name, type, address, coalesce(url,''), geohash, district FROM shops WHERE shop_id = $1", shopID)
+	r := Conn.QueryRow(context.Background(),
+		"SELECT name, type, address, coalesce(url,''), geohash, district FROM shops WHERE shop_id = $1", shopID)
 	shop := Shop{}
 	err := r.Scan(&shop.Name, &shop.Type, &shop.Address, &shop.URL, &shop.Geohash, &shop.District)
 	if err != nil {
