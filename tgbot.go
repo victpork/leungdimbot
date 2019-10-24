@@ -172,8 +172,13 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 				if update.CallbackQuery.Data[0] == 'P' {
 					//Jump to another page
 					pageInfo := strings.Split(update.CallbackQuery.Data[1:], "||")
+					var shops []dao.Shop
 					offset, err := strconv.Atoi(pageInfo[0])
-					shops, err := shopWithTags(pageInfo[1:])
+					if strings.HasPrefix(pageInfo[1], "<G>") {
+						shops, err = shopWithGeohash(strings.TrimPrefix(pageInfo[1], "<G>"))
+					} else {
+						shops, err = shopWithTags(pageInfo[1:])
+					}
 					if err != nil {
 						log.Print(err)
 					}
@@ -224,7 +229,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 				case 1:
 					err = r.SendSingleShop(update.Message.Chat.ID, shops[0])
 				default:
-					err = r.SendList(update.Message.Chat.ID, shops, geoHashStr, EntriesPerPage, 0)
+					err = r.SendList(update.Message.Chat.ID, shops, "<G>" + geoHashStr, EntriesPerPage, 0)
 				}
 				if err != nil {
 					log.Print(err)
