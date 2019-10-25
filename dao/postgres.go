@@ -163,5 +163,5 @@ func (pg *PostgresBackend) ShopByID(shopID int) (Shop, error) {
 
 //Close close DB connection
 func (pg *PostgresBackend) Close() error {
-	return pg.Close()
+	return pg.conn.Close(context.Background())
 }

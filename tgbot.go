@@ -42,7 +42,10 @@ func New(options ...Option) (r *ServeBot, err error) {
 			return nil, err
 		}
 	}
-	shopCnt, err := da.ShopCount()
+	if r.da == nil {
+		return nil, fmt.Errorf("Datastore undefined")
+	}
+	shopCnt, err := r.da.ShopCount()
 	log.Printf("Database loaded with %d shop(s)", shopCnt) 
 	log.Printf("Authorized on account %s", r.bot.Self.UserName)
 	return r, nil
@@ -141,7 +144,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 		case update.InlineQuery != nil:
 			// Inline query
 			keywords := strings.Split(strings.TrimSpace(update.InlineQuery.Query), " ")
-			shops, err := shopWithTags(keywords)
+			shops, err := r.shopWithTags(keywords)
 			if err != nil {
 				log.Printf("[ERR] Database error: %v", err)
 				continue
@@ -175,9 +178,9 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 					var shops []dao.Shop
 					offset, err := strconv.Atoi(pageInfo[0])
 					if strings.HasPrefix(pageInfo[1], "<G>") {
-						shops, err = shopWithGeohash(strings.TrimPrefix(pageInfo[1], "<G>"))
+						shops, err = r.shopWithGeohash(strings.TrimPrefix(pageInfo[1], "<G>"))
 					} else {
-						shops, err = shopWithTags(pageInfo[1:])
+						shops, err = r.shopWithTags(pageInfo[1:])
 					}
 					if err != nil {
 						log.Print(err)
@@ -218,7 +221,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 				//Get geohash
 				geoHashStr := ghash.EncodeWithPrecision(update.Message.Location.Latitude, update.Message.Location.Longitude, GeohashPrecision)
 				log.Println("Geohash submitted: ", geoHashStr)
-				shops, err := shopWithGeohash(geoHashStr)
+				shops, err := r.shopWithGeohash(geoHashStr)
 				if err != nil {
 					r.SendMsg(update.Message.Chat.ID, "Database error! Please try again later")
 				}
@@ -239,7 +242,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 				//Text search
 				keywords := strings.Split(update.Message.Text, " ")
 				msgBody := strings.Builder{}
-				shops, err := shopWithTags(keywords)
+				shops, err := r.shopWithTags(keywords)
 				if err != nil {
 					msgBody.WriteString("Error! DB error!")
 					log.Println("DB err:", err)

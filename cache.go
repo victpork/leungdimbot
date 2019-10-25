@@ -9,8 +9,7 @@ import (
 )
 
 var (
-	cache *lru.TwoQueueCache 
-	da dao.Backend
+	cache *lru.TwoQueueCache
 )
 
 func init() {
@@ -21,7 +20,7 @@ func init() {
 	}
 }
 
-func shopWithGeohash(geohash string) ([]dao.Shop, error) {
+func (s *ServeBot) shopWithGeohash(geohash string) ([]dao.Shop, error) {
 	var err error
 	lat, long := ghash.Decode(geohash)
 	v, ok := cache.Get(geohash)
@@ -29,7 +28,7 @@ func shopWithGeohash(geohash string) ([]dao.Shop, error) {
 	if ok {
 		shops = v.([]dao.Shop)
 	} else {
-		shops, err = da.NearestShops(lat, long, "1km")
+		shops, err = s.da.NearestShops(lat, long, "1km")
 		if err != nil {
 			log.Println("DB err:", err)
 			return nil, err
@@ -40,7 +39,7 @@ func shopWithGeohash(geohash string) ([]dao.Shop, error) {
 	return shops, nil
 }
 
-func shopWithTags(keywords []string) ([]dao.Shop, error) {
+func (s *ServeBot) shopWithTags(keywords []string) ([]dao.Shop, error) {
 	var err error
 	cacheKey := strings.Join(keywords, "||")
 	v, ok := cache.Get(cacheKey)
@@ -48,7 +47,7 @@ func shopWithTags(keywords []string) ([]dao.Shop, error) {
 	if ok {
 		shops = v.([]dao.Shop)
 	} else {
-		shops, err = da.ShopsWithKeyword(keywords)
+		shops, err = s.da.ShopsWithKeyword(keywords)
 		if err != nil {
 			log.Println("DB err:", err)
 			return nil, err
