@@ -5,10 +5,12 @@ import (
 	"equa.link/wongdim/dao"
 	lru "github.com/hashicorp/golang-lru"
 	"strings"
+	ghash "github.com/mmcloughlin/geohash"
 )
 
 var (
 	cache *lru.TwoQueueCache 
+	da dao.Backend
 )
 
 func init() {
@@ -21,12 +23,13 @@ func init() {
 
 func shopWithGeohash(geohash string) ([]dao.Shop, error) {
 	var err error
+	lat, long := ghash.Decode(geohash)
 	v, ok := cache.Get(geohash)
 	var shops []dao.Shop
 	if ok {
 		shops = v.([]dao.Shop)
 	} else {
-		shops, err = dao.NearestShops(geohash)
+		shops, err = da.NearestShops(lat, long, "1km")
 		if err != nil {
 			log.Println("DB err:", err)
 			return nil, err
@@ -45,7 +48,7 @@ func shopWithTags(keywords []string) ([]dao.Shop, error) {
 	if ok {
 		shops = v.([]dao.Shop)
 	} else {
-		shops, err = dao.ShopsWithTags(keywords)
+		shops, err = da.ShopsWithKeyword(keywords)
 		if err != nil {
 			log.Println("DB err:", err)
 			return nil, err

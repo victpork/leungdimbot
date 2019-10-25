@@ -2,35 +2,29 @@ package dao
 
 import (
 	"context"
-	"fmt"
-	"github.com/jackc/pgx/v4"
+	pgx "github.com/jackc/pgx/v4"
 	"log"
+	ghash "github.com/mmcloughlin/geohash"
 )
 
-//Shop is a struct for storing shop info
-type Shop struct {
-	ID       int    //Internal ID
-	Name     string //Shop name
-	Address  string //Shop address
-	Geohash  string //Geohash code for lat/long coordinates
-	Type     string
-	District string
-	URL      string
-	Tags     []string
+//PostgresBackend is the data backend supported by PostgresSQL database
+type PostgresBackend struct {
+	//Conn is the database connection
+	conn *pgx.Conn
 }
 
-var (
-	//Conn is the database connection
-	Conn *pgx.Conn
-)
-
-func (s Shop) String() string {
-	return fmt.Sprintf("%s (%s)\n%s", s.Name, s.Type, s.Address)
+//NewPostgresBackend creates and return a backend backed by PostgresSQL
+func NewPostgresBackend(connStr string) (*PostgresBackend, error) {
+	db, err := pgx.Connect(context.Background(), connStr)
+	if err != nil {
+		return nil, err
+	}
+	return &PostgresBackend{db}, nil
 }
 
 //CreateTable create necessary table for storing shop records
-func CreateTable() error {
-	_, err := Conn.Exec(context.Background(), `CREATE TABLE public.shops
+func (pg *PostgresBackend) CreateTable() error {
+	_, err := pg.conn.Exec(context.Background(), `CREATE TABLE public.shops
 	(
 		shop_id SERIAL NOT NULL,
 		name character varying(50) NOT NULL,
@@ -47,8 +41,8 @@ func CreateTable() error {
 }
 
 //ShopMissingInfo get data with missing info
-func ShopMissingInfo() ([]Shop, error) {
-	rows, err := Conn.Query(context.Background(),
+func (pg *PostgresBackend) ShopMissingInfo() ([]Shop, error) {
+	rows, err := pg.conn.Query(context.Background(),
 		"SELECT shop_id, name, district, coalesce(address, ''), coalesce(geohash, ''), type FROM shops WHERE geohash IS NULL OR tags IS NULL")
 	if err != nil {
 		return nil, err
@@ -64,14 +58,14 @@ func ShopMissingInfo() ([]Shop, error) {
 }
 
 //UpdateShopInfo fill missing info into shops
-func UpdateShopInfo(shops []Shop) error {
-	tx, err := Conn.Begin(context.Background())
+func (pg *PostgresBackend) UpdateShopInfo(shops []Shop) error {
+	tx, err := pg.conn.Begin(context.Background())
 	if err != nil {
 		return err
 	}
 	var rowsAffected int64 = 0
 	for _, shop := range shops {
-		cmdTag, err := Conn.Exec(context.Background(),
+		cmdTag, err := pg.conn.Exec(context.Background(),
 			"UPDATE shops SET address = $1, geohash = $2 WHERE shop_id = $3",
 			shop.Address, shop.Geohash, shop.ID)
 		if err != nil {
@@ -86,10 +80,10 @@ func UpdateShopInfo(shops []Shop) error {
 }
 
 //NearestShops retrieves nearest shops with provided geohash
-func NearestShops(geohash string) ([]Shop, error) {
-	rows, err := Conn.Query(context.Background(),
+func (pg *PostgresBackend) NearestShops(lat, long float64, distance string) ([]Shop, error) {
+	rows, err := pg.conn.Query(context.Background(),
 		"SELECT shop_id, name, type, coalesce(address, ''), coalesce(url,''), geohash, district FROM shops WHERE LEFT(geohash, 6) = $1 ORDER BY geohash",
-		geohash)
+		ghash.EncodeWithPrecision(lat, long, 6))
 	if err != nil {
 		return nil, err
 	}
@@ -103,12 +97,22 @@ func NearestShops(geohash string) ([]Shop, error) {
 	return shoplist, nil
 }
 
-//ShopsWithTags returns shops with tags provided
-func ShopsWithTags(tags []string) ([]Shop, error) {
-	rows, err := Conn.Query(context.Background(), `SELECT shop_id, name, type, address, 
+//ShopsWithKeyword returns shops with tags provided
+func (pg *PostgresBackend) ShopsWithKeyword(tags []string) ([]Shop, error) {
+	var rows pgx.Rows
+	var err error
+	if len(tags) == 1 {
+		rows, err = pg.conn.Query(context.Background(), `SELECT shop_id, name, type, address, 
+		coalesce(url,''), geohash, district 
+		FROM shops WHERE (tags @> $1 OR name ILIKE '%'||$2||'%') and address IS NOT NULL`,
+			tags, tags[0])
+	} else {
+		rows, err = pg.conn.Query(context.Background(), `SELECT shop_id, name, type, address, 
 	coalesce(url,''), geohash, district 
-	FROM shops WHERE (tags @> $1 OR name ILIKE '%'||$2||'%') and address IS NOT NULL`,
-		tags, tags[0])
+	FROM shops WHERE tags @> $1 and address IS NOT NULL`,
+		tags)
+	}
+	
 	if err != nil {
 		return nil, err
 	}
@@ -126,8 +130,8 @@ func ShopsWithTags(tags []string) ([]Shop, error) {
 }
 
 //ShopCount returns the number of shops stored in system
-func ShopCount() (int, error) {
-	r := Conn.QueryRow(context.Background(), "SELECT count(*) FROM shops")
+func (pg *PostgresBackend) ShopCount() (int, error) {
+	r := pg.conn.QueryRow(context.Background(), "SELECT count(*) FROM shops")
 	var cnt int
 	err := r.Scan(&cnt)
 	if err != nil {
@@ -137,8 +141,8 @@ func ShopCount() (int, error) {
 }
 
 //UpdateTags set keywords for searching for the shops
-func UpdateTags() (int, error) {
-	ctag, err := Conn.Exec(context.Background(), "update shops set tags = array[district,type] where tags is null")
+func (pg *PostgresBackend) UpdateTags() (int, error) {
+	ctag, err := pg.conn.Exec(context.Background(), "update shops set tags = array[district,type] where tags is null")
 	if err != nil {
 		return -1, err
 	}
@@ -146,8 +150,8 @@ func UpdateTags() (int, error) {
 }
 
 //ShopByID returns shop by internal ID
-func ShopByID(shopID int) (Shop, error) {
-	r := Conn.QueryRow(context.Background(),
+func (pg *PostgresBackend) ShopByID(shopID int) (Shop, error) {
+	r := pg.conn.QueryRow(context.Background(),
 		"SELECT name, type, address, coalesce(url,''), geohash, district FROM shops WHERE shop_id = $1", shopID)
 	shop := Shop{}
 	err := r.Scan(&shop.Name, &shop.Type, &shop.Address, &shop.URL, &shop.Geohash, &shop.District)
@@ -155,4 +159,9 @@ func ShopByID(shopID int) (Shop, error) {
 		return shop, err
 	}
 	return shop, nil
+}
+
+//Close close DB connection
+func (pg *PostgresBackend) Close() error {
+	return pg.Close()
 }

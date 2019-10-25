@@ -2,11 +2,10 @@ package main
 
 import (
 	"equa.link/wongdim"
-	"github.com/jackc/pgx/v4"
+	"equa.link/wongdim/dao"
 	"github.com/spf13/viper"
 	"log"
 	"fmt"
-	"context"
 )
 
 func init() {
@@ -31,13 +30,14 @@ func main() {
 		viper.Get("db.user"),
 		viper.Get("db.password"),
 		viper.Get("db.db"))
-	db, err := pgx.Connect(context.Background(), dbConnStr)
+	db, err := dao.NewPostgresBackend(dbConnStr)
 	if err != nil {
 		log.Fatal("Could not connect to database", err)
 	}
+	defer db.Close()
 	log.Print("Database connected")
 	bot, err := wongdim.New(
-		wongdim.WithDatabase(db),
+		wongdim.WithBackend(db),
 		wongdim.WithTelegramAPIKey(viper.GetString("tg.key"), viper.GetBool("tg.debug")),
 		wongdim.WithWebhookURL(viper.GetString("tg.serveURL")),
 		wongdim.WithMapAPIKey(viper.GetString("googlemap.key")),

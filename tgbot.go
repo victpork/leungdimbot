@@ -1,10 +1,8 @@
 package wongdim
 
 import (
-	"github.com/jackc/pgx/v4"
 	"equa.link/wongdim/dao"
 	"equa.link/wongdim/batch"
-	geohash "github.com/TomiHiltunen/geohash-golang"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"log"
 	"net/http"
@@ -12,6 +10,7 @@ import (
 	"fmt"
 	"context"
 	"strconv"
+	ghash "github.com/mmcloughlin/geohash"
 )
 
 // ServeBot is the bot construct for serving shops info
@@ -21,6 +20,7 @@ type ServeBot struct {
 	mapClient batch.GeocodeClient
 	keyFile string
 	certFile string
+	da dao.Backend
 }
 
 // Option is a constructor argument for Retrievr
@@ -42,7 +42,7 @@ func New(options ...Option) (r *ServeBot, err error) {
 			return nil, err
 		}
 	}
-	shopCnt, err := dao.ShopCount()
+	shopCnt, err := da.ShopCount()
 	log.Printf("Database loaded with %d shop(s)", shopCnt) 
 	log.Printf("Authorized on account %s", r.bot.Self.UserName)
 	return r, nil
@@ -74,10 +74,10 @@ func WithTelegramAPIKey(key string, debug bool) Option {
 	}
 }
 
-// WithDatabase configures bot with backend database
-func WithDatabase(db *pgx.Conn) Option {
+// WithBackend configures bot with backend database
+func WithBackend(backend dao.Backend) Option {
 	return func(s *ServeBot) error {
-		dao.Conn = db
+		s.da = backend
 		return nil
 	}
 }
@@ -113,7 +113,7 @@ func (r *ServeBot) Listen() error {
 	http.HandleFunc("/fillInfo", func(writer http.ResponseWriter, req *http.Request) {
 		ctx := context.Background()
 		
-		errCh := batch.Run(ctx, dao.Conn, r.mapClient.FillGeocode)
+		errCh := batch.Run(ctx, r.da, r.mapClient.FillGeocode)
 
 		go func() {
 			for e := range errCh {
@@ -148,13 +148,13 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 			}
 			result := make([]interface{}, 0, len(shops))
 			for i := range shops {
-				box:= geohash.Decode(shops[i].Geohash)
-
+				box:= ghash.BoundingBox(shops[i].Geohash)
+				lat, long := box.Center()
 				r := tgbotapi.NewInlineQueryResultLocation(
-					update.InlineQuery.Query + strconv.Itoa(shops[i].ID), shops[i].String(), box.Center().Lat(),box.Center().Lng())
+					update.InlineQuery.Query + strconv.Itoa(shops[i].ID), shops[i].String(), lat, long)
 				r.InputMessageContent = tgbotapi.InputVenueMessageContent{
-					Latitude: box.Center().Lat(),
-					Longitude: box.Center().Lng(),
+					Latitude: lat,
+					Longitude: long,
 					Title: shops[i].Name,
 					Address: shops[i].Address,
 				}
@@ -199,7 +199,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 					if err != nil {
 						log.Printf("Unexpected data: %s, %v", update.CallbackQuery.Data, err)		
 					} else {
-						result, err := dao.ShopByID(itemID)
+						result, err := r.da.ShopByID(itemID)
 						if err != nil {
 							r.SendMsg(update.CallbackQuery.Message.Chat.ID, "Database error!")
 							log.Printf("Shop not found: %d, %v", itemID, err)
@@ -216,7 +216,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 			case update.Message.Location != nil:
 				//Posting location
 				//Get geohash
-				geoHashStr := geohash.EncodeWithPrecision(update.Message.Location.Latitude, update.Message.Location.Longitude, GeohashPrecision)
+				geoHashStr := ghash.EncodeWithPrecision(update.Message.Location.Latitude, update.Message.Location.Longitude, GeohashPrecision)
 				log.Println("Geohash submitted: ", geoHashStr)
 				shops, err := shopWithGeohash(geoHashStr)
 				if err != nil {
@@ -334,9 +334,9 @@ func shopListMessage(shops []dao.Shop, key string, limit, offset int) (string, t
 //SendSingleShop sends single shop data to Chat, along with 
 // coordinates
 func (r ServeBot) SendSingleShop(chatID int64, shop dao.Shop) error {
-	box := geohash.Decode(shop.Geohash)
-
-	venue := tgbotapi.NewVenue(chatID, shop.Name, shop.Address, box.Center().Lat(), box.Center().Lng())
+	box := ghash.BoundingBox(shop.Geohash)
+	lat, long := box.Center()
+	venue := tgbotapi.NewVenue(chatID, shop.Name, shop.Address, lat, long)
 	_, err := r.bot.Send(venue)
 	if err != nil {
 		return fmt.Errorf("ChatID %v cannot be sent: %v", chatID, err)
