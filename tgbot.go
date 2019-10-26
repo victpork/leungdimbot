@@ -143,8 +143,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 		switch {
 		case update.InlineQuery != nil:
 			// Inline query
-			keywords := strings.Split(strings.TrimSpace(update.InlineQuery.Query), " ")
-			shops, err := r.shopWithTags(keywords)
+			shops, err := r.shopWithTags(strings.TrimSpace(update.InlineQuery.Query))
 			if err != nil {
 				log.Printf("[ERR] Database error: %v", err)
 				continue
@@ -180,7 +179,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 					if strings.HasPrefix(pageInfo[1], "<G>") {
 						shops, err = r.shopWithGeohash(strings.TrimPrefix(pageInfo[1], "<G>"))
 					} else {
-						shops, err = r.shopWithTags(pageInfo[1:])
+						shops, err = r.shopWithTags(pageInfo[1])
 					}
 					if err != nil {
 						log.Print(err)
@@ -240,9 +239,8 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 				
 			case len(update.Message.Text) > 0:
 				//Text search
-				keywords := strings.Split(update.Message.Text, " ")
 				msgBody := strings.Builder{}
-				shops, err := r.shopWithTags(keywords)
+				shops, err := r.shopWithTags(update.Message.Text)
 				if err != nil {
 					msgBody.WriteString("Error! DB error!")
 					log.Println("DB err:", err)
@@ -253,8 +251,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 				case 1:
 					err = r.SendSingleShop(update.Message.Chat.ID, shops[0])
 				default:
-					searchKey := strings.Join(keywords, "||")
-					err = r.SendList(update.Message.Chat.ID, shops, searchKey, EntriesPerPage, 0)
+					err = r.SendList(update.Message.Chat.ID, shops, update.Message.Text, EntriesPerPage, 0)
 				}
 				if err != nil {
 					log.Print(err)

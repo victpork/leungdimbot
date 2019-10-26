@@ -4,6 +4,12 @@ import (
 	"fmt"
 )
 
+const (
+	//PostgreSQL is the type name for PostgreSQL DB
+	PostgreSQL = "pgsql"
+	//Bleve is the type name for Bleve search engine
+	Bleve = "bleve"
+)
 //Shop is a struct for storing shop info
 type Shop struct {
 	ID       int    //Internal ID
@@ -27,10 +33,10 @@ func (s Shop) BleveType() string {
 //Backend represents an adstract data backend, which can have different
 //implementation underlying
 type Backend interface {
-	NearestShops(lat, long float64, distance string) ([]Shop, error)
-	ShopsWithKeyword(keywords []string) ([]Shop, error)
+	ShopsWithKeyword(keywords string) ([]Shop, error)
 	ShopCount() (int, error)
 	ShopByID(shopID int) (Shop, error)
 	UpdateShopInfo(shops []Shop) error
+	NearestShops(lat, long float64, distance string) ([]Shop, error)
 	ShopMissingInfo() ([]Shop, error)
 }

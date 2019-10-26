@@ -5,6 +5,7 @@ import (
 	pgx "github.com/jackc/pgx/v4"
 	"log"
 	ghash "github.com/mmcloughlin/geohash"
+	"strings"
 )
 
 //PostgresBackend is the data backend supported by PostgresSQL database
@@ -98,9 +99,10 @@ func (pg *PostgresBackend) NearestShops(lat, long float64, distance string) ([]S
 }
 
 //ShopsWithKeyword returns shops with tags provided
-func (pg *PostgresBackend) ShopsWithKeyword(tags []string) ([]Shop, error) {
+func (pg *PostgresBackend) ShopsWithKeyword(keywords string) ([]Shop, error) {
 	var rows pgx.Rows
 	var err error
+	tags := strings.Split(keywords, " ")
 	if len(tags) == 1 {
 		rows, err = pg.conn.Query(context.Background(), `SELECT shop_id, name, type, address, 
 		coalesce(url,''), geohash, district 

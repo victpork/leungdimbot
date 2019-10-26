@@ -6,6 +6,7 @@ import (
 	"github.com/blevesearch/bleve"
 	"github.com/blevesearch/bleve/mapping"
 	"github.com/blevesearch/bleve/search"
+	"github.com/blevesearch/bleve/search/query"
 	"github.com/blevesearch/bleve/analysis/analyzer/keyword"
 )
 
@@ -48,17 +49,8 @@ func (b *BleveBackend) ShopByID(shopID int) (Shop, error) {
 //NearestShops retrieves nearest shops with provided current location and distance
 func (b *BleveBackend) NearestShops(lat, long float64, dist string) ([]Shop, error) {
 	q := bleve.NewGeoDistanceQuery(long, lat, dist)
-	req := bleve.NewSearchRequest(q)
-	res, err := b.index.Search(req)
-	if err != nil {
-		return nil, err
-	}
-	shops := make([]Shop, res.Size())
-	for i := range res.Hits {
-		shops[i] = convertSearchResultToShop(*res.Hits[i])
-	}
-
-	return shops, nil
+	
+	return b.queryIndex(q)
 }
 
 func newShopIndexMapping() mapping.IndexMapping {
@@ -117,4 +109,32 @@ func convertSearchResultToShop(docMatch search.DocumentMatch) Shop {
 	}
 
 	return s
+}
+
+// ShopsWithKeyword returns shops based on keywords
+func (b *BleveBackend) ShopsWithKeyword(keyword string) ([]Shop, error) {
+	q := bleve.NewMatchPhraseQuery(keyword)
+	return b.queryIndex(q)
+}
+
+
+// ShopMissingInfo returns shops with missing location or addresses
+func (b *BleveBackend) ShopMissingInfo() ([]Shop, error) {
+	q := bleve.NewBoolFieldQuery(false)
+	q.SetField("AddressFilled")
+	return b.queryIndex(q)
+}
+
+func (b *BleveBackend) queryIndex(q query.Query) ([]Shop, error) {
+	req := bleve.NewSearchRequest(q)
+	res, err := b.index.Search(req)
+	if err != nil {
+		return nil, err
+	}
+	shops := make([]Shop, len(res.Hits))
+	for i := range res.Hits {
+		shops[i] = convertSearchResultToShop(*res.Hits[i])
+	}
+
+	return shops, nil
 }

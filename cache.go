@@ -4,7 +4,6 @@ import (
 	"log"
 	"equa.link/wongdim/dao"
 	lru "github.com/hashicorp/golang-lru"
-	"strings"
 	ghash "github.com/mmcloughlin/geohash"
 )
 
@@ -39,10 +38,9 @@ func (s *ServeBot) shopWithGeohash(geohash string) ([]dao.Shop, error) {
 	return shops, nil
 }
 
-func (s *ServeBot) shopWithTags(keywords []string) ([]dao.Shop, error) {
+func (s *ServeBot) shopWithTags(keywords string) ([]dao.Shop, error) {
 	var err error
-	cacheKey := strings.Join(keywords, "||")
-	v, ok := cache.Get(cacheKey)
+	v, ok := cache.Get(keywords)
 	var shops []dao.Shop
 	if ok {
 		shops = v.([]dao.Shop)
@@ -52,7 +50,7 @@ func (s *ServeBot) shopWithTags(keywords []string) ([]dao.Shop, error) {
 			log.Println("DB err:", err)
 			return nil, err
 		}
-		cache.Add(cacheKey, shops)
+		cache.Add(keywords, shops)
 	}
 
 	return shops, nil
