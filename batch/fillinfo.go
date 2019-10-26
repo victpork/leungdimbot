@@ -39,8 +39,10 @@ func NewGeocodeClient(apiKey string) (GeocodeClient, error) {
 //FillGeocode fills Geocode and address for given shop
 func (gc GeocodeClient) FillGeocode(ctx context.Context, shop dao.Shop) (dao.Shop, error) {
 	geoReq := maps.GeocodingRequest{}
+	useOriginalAddr := false
 	if len(shop.Address) > 0 {
 		geoReq.Address = shop.Address
+		useOriginalAddr = true
 	} else {
 		geoReq.Address = shop.District + " " + shop.Name
 	}
@@ -65,7 +67,11 @@ func (gc GeocodeClient) FillGeocode(ctx context.Context, shop dao.Shop) (dao.Sho
 		}
 	} else {
 		log.Printf("Partial address: Search keyword:[%s] - ID: %d", geoReq.Address, shop.ID)
-		return shop, errors.New("Received partial address")
+		if (useOriginalAddr) {
+			shop.Geohash = ghash.Encode(res[0].Geometry.Location.Lat, res[0].Geometry.Location.Lng)
+		} else {
+			return shop, errors.New("Received partial address")
+		}
 	}
 	return shop, nil
 }
