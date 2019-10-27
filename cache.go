@@ -19,15 +19,15 @@ func init() {
 	}
 }
 
-func (s *ServeBot) shopWithGeohash(geohash string) ([]dao.Shop, error) {
+func (s *ServeBot) shopWithGeohash(lat, long float64) ([]dao.Shop, error) {
 	var err error
-	lat, long := ghash.Decode(geohash)
+	geohash := ghash.EncodeWithPrecision(lat, long, GeohashPrecision)
 	v, ok := cache.Get(geohash)
 	var shops []dao.Shop
 	if ok {
 		shops = v.([]dao.Shop)
 	} else {
-		shops, err = s.da.NearestShops(lat, long, "1km")
+		shops, err = s.da.NearestShops(lat, long, "700m")
 		if err != nil {
 			log.Println("DB err:", err)
 			return nil, err

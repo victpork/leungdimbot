@@ -30,7 +30,7 @@ const (
 	//EntriesPerPage is number of entries per display in single message
 	EntriesPerPage = 10
 	//GeohashPrecision is the no. of characters used to represent a coordinates
-	GeohashPrecision = 6
+	GeohashPrecision = 7
 )
 
 // New return new instance of ServeBot
@@ -177,7 +177,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 					var shops []dao.Shop
 					offset, err := strconv.Atoi(pageInfo[0])
 					if strings.HasPrefix(pageInfo[1], "<G>") {
-						shops, err = r.shopWithGeohash(strings.TrimPrefix(pageInfo[1], "<G>"))
+						shops, err = r.shopWithGeohash(ghash.Decode(strings.TrimPrefix(pageInfo[1], "<G>")))
 					} else {
 						shops, err = r.shopWithTags(pageInfo[1])
 					}
@@ -218,9 +218,8 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 			case update.Message.Location != nil:
 				//Posting location
 				//Get geohash
-				geoHashStr := ghash.EncodeWithPrecision(update.Message.Location.Latitude, update.Message.Location.Longitude, GeohashPrecision)
-				log.Println("Geohash submitted: ", geoHashStr)
-				shops, err := r.shopWithGeohash(geoHashStr)
+				//geoHashStr := ghash.EncodeWithPrecision(update.Message.Location.Latitude, update.Message.Location.Longitude, GeohashPrecision)
+				shops, err := r.shopWithGeohash(update.Message.Location.Latitude, update.Message.Location.Longitude)
 				if err != nil {
 					r.SendMsg(update.Message.Chat.ID, "Database error! Please try again later")
 				}
@@ -231,6 +230,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 				case 1:
 					err = r.SendSingleShop(update.Message.Chat.ID, shops[0])
 				default:
+					geoHashStr := ghash.EncodeWithPrecision(update.Message.Location.Latitude, update.Message.Location.Longitude, GeohashPrecision)
 					err = r.SendList(update.Message.Chat.ID, shops, "<G>" + geoHashStr, EntriesPerPage, 0)
 				}
 				if err != nil {

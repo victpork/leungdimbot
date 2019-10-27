@@ -82,9 +82,10 @@ func (pg *PostgresBackend) UpdateShopInfo(shops []Shop) error {
 
 //NearestShops retrieves nearest shops with provided geohash
 func (pg *PostgresBackend) NearestShops(lat, long float64, distance string) ([]Shop, error) {
+	gHashArr := area(ghash.EncodeWithPrecision(lat, long, 7), distance)
 	rows, err := pg.conn.Query(context.Background(),
-		"SELECT shop_id, name, type, coalesce(address, ''), coalesce(url,''), geohash, district FROM shops WHERE LEFT(geohash, 6) = $1 ORDER BY geohash",
-		ghash.EncodeWithPrecision(lat, long, 6))
+		"SELECT shop_id, name, type, coalesce(address, ''), coalesce(url,''), geohash, district FROM shops WHERE LEFT(geohash, 7) = ANY($1) ORDER BY geohash",
+		gHashArr)
 	if err != nil {
 		return nil, err
 	}
@@ -166,4 +167,38 @@ func (pg *PostgresBackend) ShopByID(shopID int) (Shop, error) {
 //Close close DB connection
 func (pg *PostgresBackend) Close() error {
 	return pg.conn.Close(context.Background())
+}
+
+func area(hash, distance string) []string {
+	var result []string
+	switch distance {
+	case "70m":
+		result = []string{hash}
+	case "150m":
+		result = append(ghash.Neighbors(hash), hash)
+	case "1km":
+	default:
+		result = ghash.Neighbors(hash)
+		extended := []string{
+			ghash.Neighbor(result[0], ghash.North),
+			ghash.Neighbor(result[1], ghash.North),
+			ghash.Neighbor(result[1], ghash.NorthEast),
+			ghash.Neighbor(result[1], ghash.East),
+			ghash.Neighbor(result[2], ghash.East),
+			ghash.Neighbor(result[3], ghash.East),
+			ghash.Neighbor(result[3], ghash.SouthEast),
+			ghash.Neighbor(result[3], ghash.South),
+			ghash.Neighbor(result[4], ghash.South),
+			ghash.Neighbor(result[5], ghash.South),
+			ghash.Neighbor(result[5], ghash.SouthWest),
+			ghash.Neighbor(result[5], ghash.West),
+			ghash.Neighbor(result[6], ghash.West),
+			ghash.Neighbor(result[7], ghash.West),
+			ghash.Neighbor(result[7], ghash.NorthWest),
+			ghash.Neighbor(result[7], ghash.North),
+		}
+		result = append([]string{hash}, result...)
+		result = append(result, extended...)
+	}
+	return result
 }
