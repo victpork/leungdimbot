@@ -101,20 +101,12 @@ func (pg *PostgresBackend) NearestShops(lat, long float64, distance string) ([]S
 
 //ShopsWithKeyword returns shops with tags provided
 func (pg *PostgresBackend) ShopsWithKeyword(keywords string) ([]Shop, error) {
-	var rows pgx.Rows
-	var err error
 	tags := strings.Split(keywords, " ")
-	if len(tags) == 1 {
-		rows, err = pg.conn.Query(context.Background(), `SELECT shop_id, name, type, address, 
-		coalesce(url,''), geohash, district 
-		FROM shops WHERE (tags @> $1 OR name ILIKE '%'||$2||'%') and address IS NOT NULL`,
-			tags, tags[0])
-	} else {
-		rows, err = pg.conn.Query(context.Background(), `SELECT shop_id, name, type, address, 
+	
+	rows, err := pg.conn.Query(context.Background(), `SELECT shop_id, name, type, address, 
 	coalesce(url,''), geohash, district 
-	FROM shops WHERE tags @> $1 and address IS NOT NULL`,
-		tags)
-	}
+	FROM shops WHERE (tags @> $1 OR name ILIKE '%'||$2||'%') and address IS NOT NULL`,
+		tags, keywords)
 	
 	if err != nil {
 		return nil, err
@@ -167,6 +159,29 @@ func (pg *PostgresBackend) ShopByID(shopID int) (Shop, error) {
 //Close close DB connection
 func (pg *PostgresBackend) Close() error {
 	return pg.conn.Close(context.Background())
+}
+
+// AllShops returns all records from the database
+func (pg *PostgresBackend) AllShops() ([]Shop, error) {
+	rows, err := pg.conn.Query(context.Background(),
+		"SELECT shop_id, name, type, coalesce(address, ''), coalesce(url,''), coalesce(geohash, ''), district FROM shops")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	shoplist := make([]Shop, 0)
+	for rows.Next() {
+		shop := Shop{}
+		err := rows.Scan(&shop.ID, &shop.Name, &shop.Type, &shop.Address, &shop.URL, &shop.Geohash, &shop.District)
+		if err != nil {
+			return nil, err
+		}
+		shoplist = append(shoplist, shop)
+	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+	return shoplist, nil
 }
 
 func area(hash, distance string) []string {
