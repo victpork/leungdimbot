@@ -1,26 +1,26 @@
 package wongdim
 
 import (
-	"equa.link/wongdim/dao"
+	"context"
 	"equa.link/wongdim/batch"
+	"equa.link/wongdim/dao"
+	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+	ghash "github.com/mmcloughlin/geohash"
 	"log"
 	"net/http"
-	"strings"
-	"fmt"
-	"context"
 	"strconv"
-	ghash "github.com/mmcloughlin/geohash"
+	"strings"
 )
 
 // ServeBot is the bot construct for serving shops info
 type ServeBot struct {
-	bot *tgbotapi.BotAPI
-	url string
+	bot       *tgbotapi.BotAPI
+	url       string
 	mapClient batch.GeocodeClient
-	keyFile string
-	certFile string
-	da dao.Backend
+	keyFile   string
+	certFile  string
+	da        dao.Backend
 }
 
 // Option is a constructor argument for Retrievr
@@ -46,8 +46,8 @@ func New(options ...Option) (r *ServeBot, err error) {
 		return nil, fmt.Errorf("Datastore undefined")
 	}
 	shopCnt, err := r.da.ShopCount()
-	log.Printf("Database loaded with %d shop(s)", shopCnt) 
-	log.Printf("Authorized on account %s", r.bot.Self.UserName)
+	log.Printf("[LOG] Database loaded with %d shop(s)", shopCnt)
+	log.Printf("[LOG] Authorized on account %s", r.bot.Self.UserName)
 	return r, nil
 }
 
@@ -67,6 +67,7 @@ func WithMapAPIKey(key string) Option {
 		return err
 	}
 }
+
 // WithTelegramAPIKey configures bot with Telegram API key
 func WithTelegramAPIKey(key string, debug bool) Option {
 	return func(s *ServeBot) error {
@@ -96,8 +97,8 @@ func WithCert(certFile, keyFile string) Option {
 
 //Listen start the bot to listen to request
 func (r *ServeBot) Listen() error {
-	log.Printf("URL: %s/%s", r.url, r.bot.Token)
-	_, err := r.bot.SetWebhook(tgbotapi.NewWebhook(r.url +"/"+ r.bot.Token))
+	log.Printf("[LOG] Listening on URL: %s/%s", r.url, r.bot.Token)
+	_, err := r.bot.SetWebhook(tgbotapi.NewWebhook(r.url + "/" + r.bot.Token))
 	if err != nil {
 		return err
 	}
@@ -106,7 +107,7 @@ func (r *ServeBot) Listen() error {
 		log.Fatal(err)
 	}
 	if info.LastErrorDate != 0 {
-		log.Printf("Telegram callback failed: %s", info.LastErrorMessage)
+		log.Printf("[ERR] Telegram callback failed: %s", info.LastErrorMessage)
 	}
 	updates := r.bot.ListenForWebhook("/" + r.bot.Token)
 	for i := 0; i < 5; i++ {
@@ -115,15 +116,15 @@ func (r *ServeBot) Listen() error {
 	//Create a URL for triggering fillInfo batch
 	http.HandleFunc("/fillInfo", func(writer http.ResponseWriter, req *http.Request) {
 		ctx := context.Background()
-		
+
 		errCh := batch.Run(ctx, r.da, r.mapClient.FillGeocode)
 
 		go func() {
 			for e := range errCh {
-				log.Printf("[ERR] %s", e)
+				log.Printf("[ERR] Batch error: %s", e)
 			}
 		}()
-		
+
 		cache.Purge()
 		writer.WriteHeader(http.StatusOK)
 		writer.Write([]byte("OK"))
@@ -143,30 +144,45 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 		switch {
 		case update.InlineQuery != nil:
 			// Inline query
+			offset := 0
+			if update.InlineQuery.Offset != "" {
+				var err error
+				offset, err = strconv.Atoi(update.InlineQuery.Offset)
+				if err != nil {
+					offset = 50
+				}
+			}
+			log.Printf("[LOG] Inline query: %s", strings.TrimSpace(update.InlineQuery.Query))
 			shops, err := r.shopWithTags(strings.TrimSpace(update.InlineQuery.Query))
+			log.Printf("[LOG] %d result(s) returned", len(shops))
 			if err != nil {
 				log.Printf("[ERR] Database error: %v", err)
 				continue
 			}
+
+			if len(shops) > 50 {
+				//Paging, telegram does not support over 50 inline results
+				shops = shops[offset:min(len(shops), offset+50)]
+			} 
 			result := make([]interface{}, 0, len(shops))
 			for i := range shops {
-				box:= ghash.BoundingBox(shops[i].Geohash)
+				box := ghash.BoundingBox(shops[i].Geohash)
 				lat, long := box.Center()
 				r := tgbotapi.NewInlineQueryResultLocation(
-					update.InlineQuery.Query + strconv.Itoa(shops[i].ID), shops[i].String(), lat, long)
+					update.InlineQuery.Query+strconv.Itoa(shops[i].ID), shops[i].String(), lat, long)
 				r.InputMessageContent = tgbotapi.InputVenueMessageContent{
-					Latitude: lat,
+					Latitude:  lat,
 					Longitude: long,
-					Title: shops[i].Name,
-					Address: shops[i].Address,
+					Title:     shops[i].Name,
+					Address:   shops[i].Address,
 				}
 				result = append(result, r)
 			}
 			_, err = r.bot.AnswerInlineQuery(tgbotapi.InlineConfig{
 				InlineQueryID: update.InlineQuery.ID,
-				IsPersonal: true,
-				Results: result,
-				//NextOffset: ghash + "||",
+				IsPersonal:    true,
+				Results:       result,
+				NextOffset:    strconv.Itoa(offset+50),
 			})
 		case update.CallbackQuery != nil:
 			//When user click one of the inline button in message in direct chat
@@ -185,26 +201,27 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 						log.Print(err)
 					}
 
-					err = r.RefreshList(update.CallbackQuery.Message.Chat.ID, 
+					err = r.RefreshList(update.CallbackQuery.Message.Chat.ID,
 						update.CallbackQuery.Message.MessageID,
 						shops,
 						strings.Join(pageInfo[1:], "||"),
 						EntriesPerPage, offset,
 					)
 					if err != nil {
-						log.Print(err)
+						log.Print("[ERR] Telegram error: ", err)
 					}
 				} else {
-					//Pick an item and post its detail, behaves same as picking 
+					//Pick an item and post its detail, behaves same as picking
 					//single item
 					itemID, err := strconv.Atoi(update.CallbackQuery.Data)
 					if err != nil {
-						log.Printf("Unexpected data: %s, %v", update.CallbackQuery.Data, err)		
+						log.Printf("[ERR] Unexpected data: %s, %v", update.CallbackQuery.Data, err)
 					} else {
 						result, err := r.da.ShopByID(itemID)
+						log.Printf("[LOG] Single shop %d selected: (%s)", itemID, result.Name)
 						if err != nil {
-							r.SendMsg(update.CallbackQuery.Message.Chat.ID, "Database error!")
-							log.Printf("Shop not found: %d, %v", itemID, err)
+							r.SendMsg(update.CallbackQuery.Message.Chat.ID, "資料庫錯誤! 找不到店舖")
+							log.Printf("[LOG] Shop not found: %d, %v", itemID, err)
 						} else {
 							r.SendSingleShop(update.CallbackQuery.Message.Chat.ID, result)
 						}
@@ -221,40 +238,57 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 				//geoHashStr := ghash.EncodeWithPrecision(update.Message.Location.Latitude, update.Message.Location.Longitude, GeohashPrecision)
 				shops, err := r.shopWithGeohash(update.Message.Location.Latitude, update.Message.Location.Longitude)
 				if err != nil {
-					r.SendMsg(update.Message.Chat.ID, "Database error! Please try again later")
+					r.SendMsg(update.Message.Chat.ID, "資料庫錯誤！請稍後再試")
+					log.Print("Database error: ", err)
 				}
-
-				switch (len(shops)) {
+				log.Printf("Location search, %d result(s) returned", len(shops))
+				switch len(shops) {
 				case 0:
-					err = r.SendMsg(update.Message.Chat.ID, "No shops found nearby!")
+					err = r.SendMsg(update.Message.Chat.ID, "附近找不到店舖！")
 				case 1:
 					err = r.SendSingleShop(update.Message.Chat.ID, shops[0])
 				default:
 					geoHashStr := ghash.EncodeWithPrecision(update.Message.Location.Latitude, update.Message.Location.Longitude, GeohashPrecision)
-					err = r.SendList(update.Message.Chat.ID, shops, "<G>" + geoHashStr, EntriesPerPage, 0)
+					err = r.SendList(update.Message.Chat.ID, shops, "<G>"+geoHashStr, EntriesPerPage, 0)
 				}
 				if err != nil {
-					log.Print(err)
+					log.Print("[ERR] Telegram error: ", err)
 				}
-				
+
 			case len(update.Message.Text) > 0:
-				//Text search
-				msgBody := strings.Builder{}
-				shops, err := r.shopWithTags(update.Message.Text)
-				if err != nil {
-					msgBody.WriteString("Error! DB error!")
-					log.Println("DB err:", err)
-				}
-				switch (len(shops)) {
-				case 0:
-					err = r.SendMsg(update.Message.Chat.ID, "No shops found with keywords!")
-				case 1:
-					err = r.SendSingleShop(update.Message.Chat.ID, shops[0])
-				default:
-					err = r.SendList(update.Message.Chat.ID, shops, update.Message.Text, EntriesPerPage, 0)
-				}
-				if err != nil {
-					log.Print(err)
+				if update.Message.Text == "/start" {
+					msgBody := strings.Builder{}
+					msgBody.WriteString(`- 直接輸入關鍵字(以空格分隔例如「中環 咖啡」) 或店名一部份搜尋\n`)
+					msgBody.WriteString(`- 可直接提供座標 (萬字夾>Location) 搜尋座標附近店舖\n`)
+					msgBody.WriteString(`- 利用內嵌功能(在其他對話中輸入 @WongDimBot 再加上關鍵字)分享店舖`)
+					r.SendMsg(update.Message.Chat.ID, msgBody.String())
+					log.Print("[LOG] New joiner")
+				} else if strings.HasPrefix(update.Message.Text, "/random") {
+					coordMsg := tgbotapi.NewMessage(update.Message.Chat.ID, "請貼上座標:")
+					coordMsg.ReplyMarkup = tgbotapi.NewReplyKeyboard(
+						tgbotapi.NewKeyboardButtonRow(tgbotapi.NewKeyboardButtonLocation("送出座標")),
+					)
+					r.bot.Send(coordMsg)
+				} else {
+					//Text search
+					log.Printf("Text search: %s", update.Message.Text)
+					shops, err := r.shopWithTags(update.Message.Text)
+					if err != nil {
+						r.SendMsg(update.Message.Chat.ID, "資料庫錯誤")
+						log.Println("[ERR] Database error: ", err)
+					}
+					log.Printf("%d result(s) returned", len(shops))
+					switch len(shops) {
+					case 0:
+						err = r.SendMsg(update.Message.Chat.ID, "關鍵字找不到任何結果！")
+					case 1:
+						err = r.SendSingleShop(update.Message.Chat.ID, shops[0])
+					default:
+						err = r.SendList(update.Message.Chat.ID, shops, update.Message.Text, EntriesPerPage, 0)
+					}
+					if err != nil {
+						log.Print(err)
+					}
 				}
 			}
 		}
@@ -271,7 +305,7 @@ func (r ServeBot) SendMsg(chatID int64, text string) error {
 	return nil
 }
 
-// RefreshList edit an already sent message to refresh shops list when 
+// RefreshList edit an already sent message to refresh shops list when
 // user request next/prev page
 func (r ServeBot) RefreshList(chatID int64, messageID int, shops []dao.Shop, key string, limit, offset int) error {
 	msgBody, buttons := shopListMessage(shops, key, limit, offset)
@@ -281,7 +315,7 @@ func (r ServeBot) RefreshList(chatID int64, messageID int, shops []dao.Shop, key
 	if err != nil {
 		err = fmt.Errorf("Error editing message: %w", err)
 	}
-	
+
 	_, err = r.bot.Send(tgbotapi.NewEditMessageReplyMarkup(chatID, messageID, buttons))
 	if err != nil {
 		err = fmt.Errorf("Error updating buttons: %w", err)
@@ -321,7 +355,7 @@ func shopListMessage(shops []dao.Shop, key string, limit, offset int) (string, t
 	if offset > 0 {
 		pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData("⏮️", fmt.Sprintf("P%d||%s", min(0, offset-limit), key)))
 	}
-	if offset + EntriesPerPage < len(shops)-1 {
+	if offset+EntriesPerPage < len(shops)-1 {
 		pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData("⏭️", fmt.Sprintf("P%d||%s", min(len(shops), offset+limit), key)))
 	}
 	if len(pageControl) > 0 {
@@ -331,7 +365,7 @@ func shopListMessage(shops []dao.Shop, key string, limit, offset int) (string, t
 	return msgBody.String(), tgbotapi.NewInlineKeyboardMarkup(fullInlineKb...)
 }
 
-//SendSingleShop sends single shop data to Chat, along with 
+//SendSingleShop sends single shop data to Chat, along with
 // coordinates
 func (r ServeBot) SendSingleShop(chatID int64, shop dao.Shop) error {
 	box := ghash.BoundingBox(shop.Geohash)
@@ -345,8 +379,8 @@ func (r ServeBot) SendSingleShop(chatID int64, shop dao.Shop) error {
 }
 
 func min(a, b int) int {
-    if a < b {
-        return a
-    }
-    return b
+	if a < b {
+		return a
+	}
+	return b
 }

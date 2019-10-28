@@ -67,25 +67,14 @@ func newShopIndexMapping() mapping.IndexMapping {
 	
 	shopMapping.AddFieldMappingsAt("Geohash", bleve.NewGeoPointFieldMapping())
 	
-	noSearchMap := bleve.NewDocumentDisabledMapping()
-	shopMapping.AddSubDocumentMapping("Address", noSearchMap)
-	shopMapping.AddSubDocumentMapping("URL", noSearchMap)
+	noSearchMap := bleve.NewTextFieldMapping()
+	noSearchMap.Index = false
+	shopMapping.AddFieldMappingsAt("Address", noSearchMap)
+	shopMapping.AddFieldMappingsAt("URL", noSearchMap)
+
 	mapping.AddDocumentMapping("Shop", shopMapping)
 	mapping.TypeField = "DocType"
 	return mapping
-}
-
-// Import the provided shops into backend
-func (b *BleveBackend) Import(shops []Shop) error {
-	batch := b.index.NewBatch()
-	for i:= range shops {
-		batch.Index(strconv.Itoa(shops[i].ID), shops[i])
-	}
-	err := b.index.Batch(batch)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 //ShopCount returns total number of shops in system
@@ -137,4 +126,22 @@ func (b *BleveBackend) queryIndex(q query.Query) ([]Shop, error) {
 	}
 
 	return shops, nil
+}
+
+// UpdateShopInfo fills shops into index 
+func (b *BleveBackend) UpdateShopInfo(shops []Shop) error {
+	batch := b.index.NewBatch()
+	for i:= range shops {
+		batch.Index(strconv.Itoa(shops[i].ID), shops[i])
+	}
+	err := b.index.Batch(batch)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Close Bleve index
+func (b *BleveBackend) Close() error {
+	return b.index.Close()
 }
