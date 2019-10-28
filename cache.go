@@ -4,11 +4,11 @@ import (
 	"log"
 	"equa.link/wongdim/dao"
 	lru "github.com/hashicorp/golang-lru"
-	"strings"
+	ghash "github.com/mmcloughlin/geohash"
 )
 
 var (
-	cache *lru.TwoQueueCache 
+	cache *lru.TwoQueueCache
 )
 
 func init() {
@@ -19,14 +19,15 @@ func init() {
 	}
 }
 
-func shopWithGeohash(geohash string) ([]dao.Shop, error) {
+func (s *ServeBot) shopWithGeohash(lat, long float64) ([]dao.Shop, error) {
 	var err error
+	geohash := ghash.EncodeWithPrecision(lat, long, GeohashPrecision)
 	v, ok := cache.Get(geohash)
 	var shops []dao.Shop
 	if ok {
 		shops = v.([]dao.Shop)
 	} else {
-		shops, err = dao.NearestShops(geohash)
+		shops, err = s.da.NearestShops(lat, long, "700m")
 		if err != nil {
 			log.Println("DB err:", err)
 			return nil, err
@@ -37,20 +38,19 @@ func shopWithGeohash(geohash string) ([]dao.Shop, error) {
 	return shops, nil
 }
 
-func shopWithTags(keywords []string) ([]dao.Shop, error) {
+func (s *ServeBot) shopWithTags(keywords string) ([]dao.Shop, error) {
 	var err error
-	cacheKey := strings.Join(keywords, "||")
-	v, ok := cache.Get(cacheKey)
+	v, ok := cache.Get(keywords)
 	var shops []dao.Shop
 	if ok {
 		shops = v.([]dao.Shop)
 	} else {
-		shops, err = dao.ShopsWithTags(keywords)
+		shops, err = s.da.ShopsWithKeyword(keywords)
 		if err != nil {
 			log.Println("DB err:", err)
 			return nil, err
 		}
-		cache.Add(cacheKey, shops)
+		cache.Add(keywords, shops)
 	}
 
 	return shops, nil

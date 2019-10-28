@@ -5,7 +5,6 @@ import (
 	"equa.link/wongdim/dao"
 	"errors"
 	ghash "github.com/TomiHiltunen/geohash-golang"
-	"github.com/jackc/pgx/v4"
 	"golang.org/x/sync/errgroup"
 	"googlemaps.github.io/maps"
 	"log"
@@ -16,7 +15,7 @@ var (
 	//GeocodeAPITimeout is the timeout value for Google Geocode API timeout
 	GeocodeAPITimeout time.Duration = 3 * time.Second
 	gCodeFunc         Processor
-	conn              *pgx.Conn
+	da                dao.Backend
 )
 
 //GeocodeClient takes shop name and district, query Google Map Geocode API, and
@@ -78,9 +77,9 @@ func (gc GeocodeClient) FillGeocode(ctx context.Context, shop dao.Shop) (dao.Sho
 }
 
 //Run is a batch function that fill missing geohash, addresses, tags into shop info and save to DB
-func Run(ctx context.Context, dbConn *pgx.Conn, geoCodeAPI Processor) <-chan error {
+func Run(ctx context.Context, backend dao.Backend, geoCodeAPI Processor) <-chan error {
 	gCodeFunc = geoCodeAPI
-	conn = dbConn
+	da = backend
 	errCh := make(chan error)
 	go batchController(ctx, errCh)
 	return errCh
@@ -90,7 +89,7 @@ func batchController(ctx context.Context, errCh chan<- error) {
 	grp, ctx := errgroup.WithContext(ctx)
 	inCh := make(chan dao.Shop)
 	resultCh := make(chan dao.Shop)
-	shopList, err := dao.ShopMissingInfo()
+	shopList, err := da.ShopMissingInfo()
 	if err != nil {
 		errCh <- err
 	}
@@ -148,14 +147,19 @@ func batchController(ctx context.Context, errCh chan<- error) {
 		resultList = append(resultList, shop)
 	}
 	log.Printf("Writing %d shops info into database...", len(resultList))
-	err = dao.UpdateShopInfo(resultList)
+	err = da.UpdateShopInfo(resultList)
 	if err != nil {
 		errCh <- err
 	}
-	res, err := dao.UpdateTags()
-	if err != nil {
-		errCh <- err
+	pg, ok := da.(*dao.PostgresBackend)
+	if ok {
+		res, err := pg.UpdateTags()
+		if err != nil {
+			errCh <- err
+		} else {
+			log.Printf("%d rows updated with tags", res)
+		}
 	}
-	log.Printf("%d rows updated tags", res)
+
 	close(errCh)
 }
