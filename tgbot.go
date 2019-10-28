@@ -159,12 +159,12 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 				log.Printf("[ERR] Database error: %v", err)
 				continue
 			}
-
-			if len(shops) > 50 {
+			orgLen := len(shops)
+			if orgLen > 50 {
 				//Paging, telegram does not support over 50 inline results
-				shops = shops[offset:min(len(shops), offset+50)]
+				shops = shops[offset:min(orgLen, offset+50)]
 			} 
-			result := make([]interface{}, 0, len(shops))
+			result := make([]interface{}, len(shops))
 			for i := range shops {
 				box := ghash.BoundingBox(shops[i].Geohash)
 				lat, long := box.Center()
@@ -176,14 +176,18 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 					Title:     shops[i].Name,
 					Address:   shops[i].Address,
 				}
-				result = append(result, r)
+				result[i] = r
 			}
-			_, err = r.bot.AnswerInlineQuery(tgbotapi.InlineConfig{
+
+			inlineCfg := tgbotapi.InlineConfig{
 				InlineQueryID: update.InlineQuery.ID,
 				IsPersonal:    true,
 				Results:       result,
-				NextOffset:    strconv.Itoa(offset+50),
-			})
+			}
+			if offset+50 < orgLen { 
+				inlineCfg.NextOffset = strconv.Itoa(offset+50)
+			}
+			_, err = r.bot.AnswerInlineQuery(inlineCfg)
 		case update.CallbackQuery != nil:
 			//When user click one of the inline button in message in direct chat
 			if update.CallbackQuery.Message != nil {
