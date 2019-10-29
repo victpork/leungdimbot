@@ -192,6 +192,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 			//When user click one of the inline button in message in direct chat
 			if update.CallbackQuery.Message != nil {
 				if update.CallbackQuery.Data == "---" {
+					r.bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, update.CallbackQuery.Data))
 					continue
 				}
 				if update.CallbackQuery.Data[0] == 'P' {
@@ -344,7 +345,7 @@ func (r ServeBot) SendList(chatID int64, shops []dao.Shop, key string, limit, of
 func shopListMessage(shops []dao.Shop, key string, limit, offset int) (string, tgbotapi.InlineKeyboardMarkup) {
 	msgBody := strings.Builder{}
 	// Do paging
-	pageInd := fmt.Sprintf("%d/%d", offset/10+1, len(shops)/10)
+	pageInd := fmt.Sprintf("%d/%d", offset/EntriesPerPage+1, (len(shops) + EntriesPerPage - 1) / EntriesPerPage)
 	pagedShop := shops[offset:min(len(shops), offset+limit)]
 	btns := make([]tgbotapi.InlineKeyboardButton, 0, len(pagedShop))
 	// Generate message body and nav buttons
@@ -366,7 +367,7 @@ func shopListMessage(shops []dao.Shop, key string, limit, offset int) (string, t
 	//Add prev/next btn on second row
 	pageControl := make([]tgbotapi.InlineKeyboardButton, 0)
 	if offset > 0 {
-		pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData("⏮️", fmt.Sprintf("P%d||%s", min(0, offset-limit), key)))
+		pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData("⏮️", fmt.Sprintf("P%d||%s", max(0, offset-limit), key)))
 		//Insert page number
 		pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData(pageInd, "---"))
 	}
@@ -410,6 +411,13 @@ func (r ServeBot) SendSingleShop(chatID int64, shop dao.Shop) error {
 
 func min(a, b int) int {
 	if a < b {
+		return a
+	}
+	return b
+}
+
+func max(a, b int) int {
+	if a > b {
 		return a
 	}
 	return b
