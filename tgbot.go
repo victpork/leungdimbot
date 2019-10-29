@@ -341,6 +341,7 @@ func (r ServeBot) SendList(chatID int64, shops []dao.Shop, key string, limit, of
 func shopListMessage(shops []dao.Shop, key string, limit, offset int) (string, tgbotapi.InlineKeyboardMarkup) {
 	msgBody := strings.Builder{}
 	// Do paging
+	pageInd := fmt.Sprintf("%d/%d", offset/10+1, len(shops)/10)
 	pagedShop := shops[offset:min(len(shops), offset+limit)]
 	btns := make([]tgbotapi.InlineKeyboardButton, 0, len(pagedShop))
 	// Generate message body and nav buttons
@@ -363,8 +364,14 @@ func shopListMessage(shops []dao.Shop, key string, limit, offset int) (string, t
 	pageControl := make([]tgbotapi.InlineKeyboardButton, 0)
 	if offset > 0 {
 		pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData("⏮️", fmt.Sprintf("P%d||%s", min(0, offset-limit), key)))
+		//Insert page number
+		pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData(pageInd, ""))
 	}
 	if offset+EntriesPerPage < len(shops)-1 {
+		if len(pageControl) == 0 {
+			//Insert page number
+			pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData(pageInd, ""))
+		}
 		pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData("⏭️", fmt.Sprintf("P%d||%s", min(len(shops), offset+limit), key)))
 	}
 	if len(pageControl) > 0 {
