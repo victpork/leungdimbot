@@ -262,8 +262,8 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 			case len(update.Message.Text) > 0:
 				if update.Message.Text == "/start" {
 					msgBody := strings.Builder{}
-					msgBody.WriteString("🍙直接輸入關鍵字(以空格分隔例如「中環 咖啡」) 或店名一部份搜尋")
-					msgBody.WriteString("🍙可直接提供座標 (萬字夾>Location) 搜尋座標附近店舖\n")
+					msgBody.WriteString("🍙直接輸入關鍵字(以空格分隔例如「中環 咖啡」) 或店名一部份搜尋\n\n")
+					msgBody.WriteString("🍙可直接提供座標 (萬字夾>Location) 搜尋座標附近店舖\n\n")
 					msgBody.WriteString("🍙利用內嵌功能(在其他對話中輸入 @WongDimBot 再加上關鍵字)分享店舖")
 					r.SendMsg(update.Message.Chat.ID, msgBody.String())
 					log.Print("[LOG] New joiner")
