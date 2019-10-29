@@ -104,9 +104,9 @@ func (pg *PostgresBackend) NearestShops(lat, long float64, distance string) ([]S
 func (pg *PostgresBackend) ShopsWithKeyword(keywords string) ([]Shop, error) {
 	tags := strings.Split(keywords, " ")
 	
-	rows, err := pg.conn.Query(context.Background(), `SELECT shop_id, name, type, address, 
-	coalesce(url,''), geohash, district 
-	FROM shops WHERE (tags @> $1 OR name ILIKE '%'||$2||'%') and address IS NOT NULL`,
+	rows, err := pg.conn.Query(context.Background(), `SELECT shop_id, name, type, coalesce(address, ''), 
+	coalesce(url,''), coalesce(geohash, ''), district 
+	FROM shops WHERE (tags @> $1 OR name ILIKE '%'||$2||'%') and (address IS NOT NULL OR url IS NOT NULL)`,
 		tags, keywords)
 	
 	if err != nil {

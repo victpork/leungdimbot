@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"net/url"
 )
 
 // ServeBot is the bot construct for serving shops info
@@ -391,12 +392,16 @@ func (r ServeBot) SendSingleShop(chatID int64, shop dao.Shop) error {
 	if shop.Geohash != "" {
 		box := ghash.BoundingBox(shop.Geohash)
 		lat, long := box.Center()
-		venue := tgbotapi.NewVenue(chatID, shop.Name, shop.Address, lat, long)
+		venue := tgbotapi.NewVenue(chatID, fmt.Sprintf("%s (%s)", shop.Name, shop.Type), shop.Address, lat, long)
+		
+		var t tgbotapi.InlineKeyboardButton
 		if shop.URL != "" {
-			t:=tgbotapi.NewInlineKeyboardButtonURL("連結", shop.URL)
-			row := tgbotapi.NewInlineKeyboardRow(t)
-			venue.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(row)
+			t = tgbotapi.NewInlineKeyboardButtonURL("連結", shop.URL)
+		} else {
+			t = tgbotapi.NewInlineKeyboardButtonURL("Google", "https://google.com/?q="+url.PathEscape(shop.Name))
 		}
+		row := tgbotapi.NewInlineKeyboardRow(t)
+		venue.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(row)
 		_, err := r.bot.Send(venue)
 		if err != nil {
 			return fmt.Errorf("ChatID %v cannot be sent: %v", chatID, err)
