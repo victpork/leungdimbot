@@ -9,6 +9,8 @@ const (
 	PostgreSQL = "pgsql"
 	//Bleve is the type name for Bleve search engine
 	Bleve = "bleve"
+	//Type for non-physical (network) store
+	nonPhyStore = "網店"
 )
 //Shop is a struct for storing shop info
 type Shop struct {

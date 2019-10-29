@@ -44,7 +44,8 @@ func (pg *PostgresBackend) CreateTable() error {
 //ShopMissingInfo get data with missing info
 func (pg *PostgresBackend) ShopMissingInfo() ([]Shop, error) {
 	rows, err := pg.conn.Query(context.Background(),
-		"SELECT shop_id, name, district, coalesce(address, ''), coalesce(geohash, ''), type FROM shops WHERE geohash IS NULL OR tags IS NULL")
+		`SELECT shop_id, name, district, coalesce(address, ''), coalesce(geohash, ''),
+		 type FROM shops WHERE geohash IS NULL and district <> $1`, nonPhyStore)
 	if err != nil {
 		return nil, err
 	}

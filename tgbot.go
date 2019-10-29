@@ -302,6 +302,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 // SendMsg sends simple telegram message back to user
 func (r ServeBot) SendMsg(chatID int64, text string) error {
 	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = tgbotapi.ModeMarkdown
 	_, err := r.bot.Send(msg)
 	if err != nil {
 		return err
@@ -344,7 +345,11 @@ func shopListMessage(shops []dao.Shop, key string, limit, offset int) (string, t
 	btns := make([]tgbotapi.InlineKeyboardButton, 0, len(pagedShop))
 	// Generate message body and nav buttons
 	for i := range pagedShop {
-		msgBody.WriteString(fmt.Sprintf("(%d) *%s* (%s) - %s\n", i+1, pagedShop[i].Name, pagedShop[i].Type, pagedShop[i].District))
+		msgBody.WriteString(fmt.Sprintf("(%d) *%s* (%s) - %s", i+1, pagedShop[i].Name, pagedShop[i].Type, pagedShop[i].District))
+		if pagedShop[i].URL != "" {
+			msgBody.WriteString(fmt.Sprintf(" [連結](%s)", pagedShop[i].URL))
+		}
+		msgBody.WriteString("\n")
 		btns = append(btns, tgbotapi.NewInlineKeyboardButtonData(strconv.Itoa(i+1), strconv.Itoa(pagedShop[i].ID)))
 	}
 	fullInlineKb := make([][]tgbotapi.InlineKeyboardButton, 0)
@@ -372,13 +377,24 @@ func shopListMessage(shops []dao.Shop, key string, limit, offset int) (string, t
 //SendSingleShop sends single shop data to Chat, along with
 // coordinates
 func (r ServeBot) SendSingleShop(chatID int64, shop dao.Shop) error {
-	box := ghash.BoundingBox(shop.Geohash)
-	lat, long := box.Center()
-	venue := tgbotapi.NewVenue(chatID, shop.Name, shop.Address, lat, long)
-	_, err := r.bot.Send(venue)
-	if err != nil {
-		return fmt.Errorf("ChatID %v cannot be sent: %v", chatID, err)
+	if shop.Geohash != "" {
+		box := ghash.BoundingBox(shop.Geohash)
+		lat, long := box.Center()
+		venue := tgbotapi.NewVenue(chatID, shop.Name, shop.Address, lat, long)
+		if shop.URL != "" {
+			t:=tgbotapi.NewInlineKeyboardButtonURL("連結", shop.URL)
+			row := tgbotapi.NewInlineKeyboardRow(t)
+			venue.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(row)
+		}
+		_, err := r.bot.Send(venue)
+		if err != nil {
+			return fmt.Errorf("ChatID %v cannot be sent: %v", chatID, err)
+		}
+	} else {
+		//non-physical store
+		r.SendMsg(chatID, fmt.Sprintf("*%s* (%s) - \n[連結](%s)", shop.Name, shop.Type, shop.URL))
 	}
+	
 	return nil
 }
 
