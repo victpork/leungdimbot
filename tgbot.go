@@ -191,6 +191,9 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 		case update.CallbackQuery != nil:
 			//When user click one of the inline button in message in direct chat
 			if update.CallbackQuery.Message != nil {
+				if update.CallbackQuery.Data == "---" {
+					continue
+				}
 				if update.CallbackQuery.Data[0] == 'P' {
 					//Jump to another page
 					pageInfo := strings.Split(update.CallbackQuery.Data[1:], "||")
@@ -365,12 +368,12 @@ func shopListMessage(shops []dao.Shop, key string, limit, offset int) (string, t
 	if offset > 0 {
 		pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData("⏮️", fmt.Sprintf("P%d||%s", min(0, offset-limit), key)))
 		//Insert page number
-		pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData(pageInd, ""))
+		pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData(pageInd, "---"))
 	}
 	if offset+EntriesPerPage < len(shops)-1 {
 		if len(pageControl) == 0 {
 			//Insert page number
-			pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData(pageInd, ""))
+			pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData(pageInd, "---"))
 		}
 		pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData("⏭️", fmt.Sprintf("P%d||%s", min(len(shops), offset+limit), key)))
 	}
