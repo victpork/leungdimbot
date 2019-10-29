@@ -28,12 +28,12 @@ func (pg *PostgresBackend) CreateTable() error {
 	_, err := pg.conn.Exec(context.Background(), `CREATE TABLE public.shops
 	(
 		shop_id SERIAL NOT NULL,
-		name character varying(50) NOT NULL,
-		address character varying(200),
+		name TEXT NOT NULL,
+		address TEXT,
 		geohash character varying(12),
-		type character varying(7) NOT NULL,
-		url character varying(200),
-		district character varying(10),
+		type TEXT NOT NULL,
+		url TEXT,
+		district TEXT,
 		tags character varying[],
 		CONSTRAINT shops_pkey PRIMARY KEY (shop_id)
 	)`)
