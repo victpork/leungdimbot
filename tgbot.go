@@ -372,7 +372,7 @@ func shopListMessage(shops []dao.Shop, key string, limit, offset int) (string, t
 		//Insert page number
 		pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData(pageInd, "---"))
 	}
-	if offset+EntriesPerPage < len(shops)-1 {
+	if offset+EntriesPerPage < len(shops) {
 		if len(pageControl) == 0 {
 			//Insert page number
 			pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData(pageInd, "---"))
@@ -398,7 +398,7 @@ func (r ServeBot) SendSingleShop(chatID int64, shop dao.Shop) error {
 		if shop.URL != "" {
 			t = tgbotapi.NewInlineKeyboardButtonURL("連結", shop.URL)
 		} else {
-			t = tgbotapi.NewInlineKeyboardButtonURL("Google", "https://google.com/?q="+url.PathEscape(shop.Name))
+			t = tgbotapi.NewInlineKeyboardButtonURL("Google", "https://google.com/search?q="+url.PathEscape(shop.Name))
 		}
 		row := tgbotapi.NewInlineKeyboardRow(t)
 		venue.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(row)
