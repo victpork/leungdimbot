@@ -153,6 +153,10 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 					offset = 50
 				}
 			}
+			// Skip empty queries
+			if strings.TrimSpace(update.InlineQuery.Query) == "" {
+				continue
+			}
 			log.Printf("[LOG] Inline query: %s", strings.TrimSpace(update.InlineQuery.Query))
 			shops, err := r.shopWithTags(strings.TrimSpace(update.InlineQuery.Query))
 			log.Printf("[LOG] %d result(s) returned", len(shops))
@@ -167,17 +171,28 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 			} 
 			result := make([]interface{}, len(shops))
 			for i := range shops {
-				box := ghash.BoundingBox(shops[i].Geohash)
-				lat, long := box.Center()
-				r := tgbotapi.NewInlineQueryResultLocation(
-					update.InlineQuery.Query+strconv.Itoa(shops[i].ID), shops[i].String(), lat, long)
-				r.InputMessageContent = tgbotapi.InputVenueMessageContent{
-					Latitude:  lat,
-					Longitude: long,
-					Title:     shops[i].Name,
-					Address:   shops[i].Address,
+				if shops[i].Geohash != "" {
+					box := ghash.BoundingBox(shops[i].Geohash)
+					lat, long := box.Center()
+					r := tgbotapi.NewInlineQueryResultLocation(
+						update.InlineQuery.Query+strconv.Itoa(shops[i].ID), shops[i].String(), lat, long)
+					r.InputMessageContent = tgbotapi.InputVenueMessageContent{
+						Latitude:  lat,
+						Longitude: long,
+						Title:     shops[i].Name,
+						Address:   shops[i].Address,
+					}
+					result[i] = r
+				} else {
+					r := tgbotapi.NewInlineQueryResultArticleMarkdown(
+						update.InlineQuery.Query+strconv.Itoa(shops[i].ID), 
+						fmt.Sprintf("%s - (%s)", shops[i].String(), shops[i].District),
+						shops[i].Type, 
+					)
+					r.URL = shops[i].URL
+					result[i] = r
 				}
-				result[i] = r
+				
 			}
 
 			inlineCfg := tgbotapi.InlineConfig{
@@ -397,9 +412,9 @@ func (r ServeBot) SendSingleShop(chatID int64, shop dao.Shop) error {
 		
 		var t tgbotapi.InlineKeyboardButton
 		if shop.URL != "" {
-			t = tgbotapi.NewInlineKeyboardButtonURL("連結", shop.URL)
+			t = tgbotapi.NewInlineKeyboardButtonURL("🏘店舖網站", shop.URL)
 		} else {
-			t = tgbotapi.NewInlineKeyboardButtonURL("Google", "https://google.com/search?q="+url.PathEscape(shop.Name))
+			t = tgbotapi.NewInlineKeyboardButtonURL("🔍Google 店名", "https://google.com/search?q="+url.PathEscape(shop.Name))
 		}
 		row := tgbotapi.NewInlineKeyboardRow(t)
 		venue.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(row)
