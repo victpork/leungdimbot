@@ -116,7 +116,15 @@ func (pg *PostgresBackend) ShopsWithKeyword(keywords string) ([]Shop, error) {
 	shoplist := make([]Shop, 0)
 	for rows.Next() {
 		shop := Shop{}
-		err := rows.Scan(&shop.ID, &shop.Name, &shop.Type, &shop.Address, &shop.URL, &shop.Geohash, &shop.District)
+		err := rows.Scan(&shop.ID, 
+			&shop.Name, 
+			&shop.Type, 
+			&shop.Address, 
+			&shop.URL, 
+			&shop.Geohash, 
+			&shop.District,
+			&shop.Notes,
+		)
 		if err != nil {
 			log.Println(err)
 		}
@@ -148,9 +156,9 @@ func (pg *PostgresBackend) UpdateTags() (int, error) {
 //ShopByID returns shop by internal ID
 func (pg *PostgresBackend) ShopByID(shopID int) (Shop, error) {
 	r := pg.conn.QueryRow(context.Background(),
-		"SELECT name, type, address, coalesce(url,''), geohash, district FROM shops WHERE shop_id = $1", shopID)
+		"SELECT name, type, coalesce(address, ''), coalesce(url,''), coalesce(geohash, ''), district, coalesce(notes, '') FROM shops WHERE shop_id = $1", shopID)
 	shop := Shop{}
-	err := r.Scan(&shop.Name, &shop.Type, &shop.Address, &shop.URL, &shop.Geohash, &shop.District)
+	err := r.Scan(&shop.Name, &shop.Type, &shop.Address, &shop.URL, &shop.Geohash, &shop.District, &shop.Notes)
 	if err != nil {
 		return shop, err
 	}

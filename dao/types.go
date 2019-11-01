@@ -22,6 +22,7 @@ type Shop struct {
 	District string  //Where is the shop?
 	URL      string  //URL, currently unused
 	Tags     []string //Tags used
+	Notes    string  //Notes for the shop
 }
 
 func (s Shop) String() string {

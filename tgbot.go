@@ -379,6 +379,9 @@ func shopListMessage(shops []dao.Shop, key string, limit, offset int) (string, t
 		if pagedShop[i].URL != "" {
 			msgBody.WriteString(fmt.Sprintf(" [連結](%s)", pagedShop[i].URL))
 		}
+		if pagedShop[i].Notes != "" {
+			msgBody.WriteString(fmt.Sprintf("\n📝%s", pagedShop[i].Notes))
+		}
 		msgBody.WriteString("\n")
 		btns = append(btns, tgbotapi.NewInlineKeyboardButtonData(strconv.Itoa(i+1), strconv.Itoa(pagedShop[i].ID)))
 	}
@@ -420,7 +423,7 @@ func (r ServeBot) SendSingleShop(chatID int64, shop dao.Shop) error {
 		
 		var t tgbotapi.InlineKeyboardButton
 		if shop.URL != "" {
-			t = tgbotapi.NewInlineKeyboardButtonURL("🏠店舖網站", shop.URL)
+			t = tgbotapi.NewInlineKeyboardButtonURL("��店舖網站", shop.URL)
 		} else {
 			t = tgbotapi.NewInlineKeyboardButtonURL("🔍Google 店名", "https://google.com/search?q="+url.PathEscape(shop.Name))
 		}
@@ -434,7 +437,9 @@ func (r ServeBot) SendSingleShop(chatID int64, shop dao.Shop) error {
 		//non-physical store
 		r.SendMsg(chatID, fmt.Sprintf("*%s* (%s) - \n[連結](%s)", shop.Name, shop.Type, shop.URL))
 	}
-	
+	if shop.Notes != "" {
+		r.SendMsg(chatID, fmt.Sprintf("📝備註: %s", shop.Notes))
+	}
 	return nil
 }
 
