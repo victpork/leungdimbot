@@ -182,6 +182,14 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 						Title:     shops[i].Name,
 						Address:   shops[i].Address,
 					}
+					var t tgbotapi.InlineKeyboardButton
+					if shops[i].URL != "" {
+						t = tgbotapi.NewInlineKeyboardButtonURL("🏠店舖網站", shops[i].URL)
+					} else {
+						t = tgbotapi.NewInlineKeyboardButtonURL("🔍Google 店名", "https://google.com/search?q="+url.PathEscape(shops[i].Name))
+					}
+					l := tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(t))
+					r.ReplyMarkup = &l
 					result[i] = r
 				} else {
 					r := tgbotapi.NewInlineQueryResultArticleMarkdown(
@@ -412,7 +420,7 @@ func (r ServeBot) SendSingleShop(chatID int64, shop dao.Shop) error {
 		
 		var t tgbotapi.InlineKeyboardButton
 		if shop.URL != "" {
-			t = tgbotapi.NewInlineKeyboardButtonURL("🏘店舖網站", shop.URL)
+			t = tgbotapi.NewInlineKeyboardButtonURL("🏠店舖網站", shop.URL)
 		} else {
 			t = tgbotapi.NewInlineKeyboardButtonURL("🔍Google 店名", "https://google.com/search?q="+url.PathEscape(shop.Name))
 		}
