@@ -344,6 +344,7 @@ func (r ServeBot) RefreshList(chatID int64, messageID int, shops []dao.Shop, key
 	msgBody, buttons := shopListMessage(shops, key, limit, offset)
 	editMsg := tgbotapi.NewEditMessageText(chatID, messageID, msgBody)
 	editMsg.ParseMode = tgbotapi.ModeMarkdown
+	editMsg.DisableWebPagePreview = true
 	_, err := r.bot.Send(editMsg)
 	if err != nil {
 		err = fmt.Errorf("Error editing message: %w", err)
