@@ -5,7 +5,6 @@ import (
 	pgx "github.com/jackc/pgx/v4"
 	"log"
 	ghash "github.com/mmcloughlin/geohash"
-	"strings"
 )
 
 //PostgresBackend is the data backend supported by PostgresSQL database
@@ -34,7 +33,7 @@ func (pg *PostgresBackend) CreateTable() error {
 		type TEXT NOT NULL,
 		url TEXT,
 		district TEXT,
-		tags character varying[],
+		search_text TEXT,
 		CONSTRAINT shops_pkey PRIMARY KEY (shop_id)
 	)`)
 
@@ -102,12 +101,12 @@ func (pg *PostgresBackend) NearestShops(lat, long float64, distance string) ([]S
 
 //ShopsWithKeyword returns shops with tags provided
 func (pg *PostgresBackend) ShopsWithKeyword(keywords string) ([]Shop, error) {
-	tags := strings.Split(keywords, " ")
-	
-	rows, err := pg.conn.Query(context.Background(), `SELECT shop_id, name, type, coalesce(address, ''), 
-	coalesce(url,''), coalesce(geohash, ''), district 
-	FROM shops WHERE (tags @> $1 OR name ILIKE '%'||$2||'%') and (address IS NOT NULL OR url IS NOT NULL)`,
-		tags, keywords)
+	rows, err := pg.conn.Query(context.Background(), 
+	`SELECT shop_id, name, type, coalesce(address, ''), 
+	coalesce(url,''), coalesce(geohash, ''), district, coalesce(notes, '') 
+	FROM shops WHERE (to_tsvector('cuisine', search_text) @@ plainto_tsquery('cuisine_syn', $1) OR name ILIKE '%'||$1||'%') 
+	and (address IS NOT NULL OR url IS NOT NULL)`,
+		keywords)
 	
 	if err != nil {
 		return nil, err
@@ -146,7 +145,7 @@ func (pg *PostgresBackend) ShopCount() (int, error) {
 
 //UpdateTags set keywords for searching for the shops
 func (pg *PostgresBackend) UpdateTags() (int, error) {
-	ctag, err := pg.conn.Exec(context.Background(), "update shops set tags = array[district,type] where tags is null")
+	ctag, err := pg.conn.Exec(context.Background(), "update shops set search_text = district || ' ' || type where coalesce(TRIM(search_text), '') = ''")
 	if err != nil {
 		return -1, err
 	}
