@@ -195,7 +195,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 					r := tgbotapi.NewInlineQueryResultArticleMarkdown(
 						update.InlineQuery.Query+strconv.Itoa(shops[i].ID), 
 						fmt.Sprintf("%s - (%s)", shops[i].String(), shops[i].District),
-						shops[i].Type, 
+						fmt.Sprintf("%s - (%s)", shops[i].String(), shops[i].District) + shops[i].URL, 
 					)
 					r.URL = shops[i].URL
 					result[i] = r
@@ -288,19 +288,14 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 				}
 
 			case len(update.Message.Text) > 0:
-				if update.Message.Text == "/start" {
+				if update.Message.Text == "/start" || update.Message.Text == "/help" {
 					msgBody := strings.Builder{}
 					msgBody.WriteString("🍙直接輸入關鍵字(以空格分隔例如「中環 咖啡」) 或店名一部份搜尋\n\n")
+					msgBody.WriteString("🍙輸入「網店」作關鍵字可搜尋沒實體店面的商戶\n\n")
 					msgBody.WriteString("🍙可直接提供座標 (📎>Location) 搜尋座標附近店舖\n\n")
 					msgBody.WriteString("🍙利用內嵌功能(在其他對話中輸入 @WongDimBot 再加上關鍵字)搜尋及分享店舖")
 					r.SendMsg(update.Message.Chat.ID, msgBody.String())
 					log.Print("[LOG] New joiner")
-				} else if strings.HasPrefix(update.Message.Text, "/random") {
-					coordMsg := tgbotapi.NewMessage(update.Message.Chat.ID, "請貼上座標:")
-					coordMsg.ReplyMarkup = tgbotapi.NewReplyKeyboard(
-						tgbotapi.NewKeyboardButtonRow(tgbotapi.NewKeyboardButtonLocation("送出座標")),
-					)
-					r.bot.Send(coordMsg)
 				} else {
 					//Text search
 					log.Printf("Text search: %s", update.Message.Text)
@@ -312,7 +307,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 					log.Printf("%d result(s) returned", len(shops))
 					switch len(shops) {
 					case 0:
-						err = r.SendMsg(update.Message.Chat.ID, "關鍵字找不到任何結果！")
+						err = r.SendMsg(update.Message.Chat.ID, "關鍵字找不到任何結果\n可嘗試直接提供座標 (📎>Location) 搜尋座標附近店舖")
 					case 1:
 						err = r.SendSingleShop(update.Message.Chat.ID, shops[0])
 					default:
@@ -424,7 +419,7 @@ func (r ServeBot) SendSingleShop(chatID int64, shop dao.Shop) error {
 		
 		var t tgbotapi.InlineKeyboardButton
 		if shop.URL != "" {
-			t = tgbotapi.NewInlineKeyboardButtonURL("��店舖網站", shop.URL)
+			t = tgbotapi.NewInlineKeyboardButtonURL("🏠店舖網站", shop.URL)
 		} else {
 			t = tgbotapi.NewInlineKeyboardButtonURL("🔍Google 店名", "https://google.com/search?q="+url.PathEscape(shop.Name))
 		}
