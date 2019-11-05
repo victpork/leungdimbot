@@ -126,7 +126,7 @@ func (r *ServeBot) Listen() error {
 			}
 		}()
 
-		cache.Purge()
+		cache.Flush()
 		writer.WriteHeader(http.StatusOK)
 		writer.Write([]byte("OK"))
 	})

@@ -3,8 +3,12 @@ module equa.link/wongdim
 go 1.13
 
 require (
+	github.com/PuerkitoBio/goquery v1.5.0 // indirect
 	github.com/RoaringBitmap/roaring v0.4.21 // indirect
 	github.com/TomiHiltunen/geohash-golang v0.0.0-20150112065804-b3e4e625abfb
+	github.com/antchfx/htmlquery v1.1.0 // indirect
+	github.com/antchfx/xmlquery v1.1.0 // indirect
+	github.com/antchfx/xpath v1.1.0 // indirect
 	github.com/blevesearch/bleve v0.8.1
 	github.com/blevesearch/blevex v0.0.0-20190916190636-152f0fe5c040 // indirect
 	github.com/blevesearch/go-porterstemmer v1.0.2 // indirect
@@ -18,18 +22,24 @@ require (
 	github.com/facebookgo/stack v0.0.0-20160209184415-751773369052 // indirect
 	github.com/facebookgo/subset v0.0.0-20150612182917-8dac2c3c4870 // indirect
 	github.com/go-telegram-bot-api/telegram-bot-api v4.6.4+incompatible
+	github.com/gobwas/glob v0.2.3 // indirect
+	github.com/gocolly/colly v1.2.0
 	github.com/google/uuid v1.1.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.3
 	github.com/jackc/pgx/v4 v4.1.2
 	github.com/jmhodges/levigo v1.0.0 // indirect
+	github.com/kennygrant/sanitize v1.2.4 // indirect
 	github.com/mmcloughlin/geohash v0.9.0
+	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/remyoudompheng/bigfft v0.0.0-20190728182440-6a916e37a237 // indirect
+	github.com/saintfish/chardet v0.0.0-20120816061221-3af4cd4741ca // indirect
 	github.com/sergi/go-diff v1.0.0 // indirect
 	github.com/spf13/viper v1.4.0
 	github.com/steveyen/gtreap v0.0.0-20150807155958-0abe01ef9be2 // indirect
 	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/tecbot/gorocksdb v0.0.0-20191019123150-400c56251341 // indirect
 	github.com/technoweenie/multipartstreamer v1.0.1 // indirect
+	github.com/temoto/robotstxt v1.1.1 // indirect
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	googlemaps.github.io/maps v0.0.0-20190909213747-3c037358a0f0
 )

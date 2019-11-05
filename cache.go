@@ -3,20 +3,17 @@ package wongdim
 import (
 	"log"
 	"equa.link/wongdim/dao"
-	lru "github.com/hashicorp/golang-lru"
+	gcache "github.com/patrickmn/go-cache"
 	ghash "github.com/mmcloughlin/geohash"
+	"time"
 )
 
 var (
-	cache *lru.TwoQueueCache
+	cache *gcache.Cache
 )
 
 func init() {
-	var err error
-	cache, err = lru.New2Q(128)
-	if err != nil {
-		log.Fatal("[ERR] Error initializing cache: ", err)
-	}
+	cache = gcache.New(10*time.Minute, 20*time.Minute)
 }
 
 func (s *ServeBot) shopWithGeohash(lat, long float64) ([]dao.Shop, error) {
@@ -32,7 +29,7 @@ func (s *ServeBot) shopWithGeohash(lat, long float64) ([]dao.Shop, error) {
 			log.Println("DB err:", err)
 			return nil, err
 		}
-		cache.Add(geohash, shops)
+		cache.SetDefault(geohash, shops)
 	}
 
 	return shops, nil
@@ -50,7 +47,7 @@ func (s *ServeBot) shopWithTags(keywords string) ([]dao.Shop, error) {
 			log.Println("DB err:", err)
 			return nil, err
 		}
-		cache.Add(keywords, shops)
+		cache.SetDefault(keywords, shops)
 	}
 
 	return shops, nil
