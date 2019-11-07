@@ -32,6 +32,10 @@ const (
 	EntriesPerPage = 10
 	//GeohashPrecision is the no. of characters used to represent a coordinates
 	GeohashPrecision = 7
+
+	geoSearchPrefix = "<G>"
+	simpleSearchPrefix = "<S>"
+	advSearchPrefix = "<A>"
 )
 
 // New return new instance of ServeBot
@@ -224,15 +228,22 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 					pageInfo := strings.Split(update.CallbackQuery.Data[1:], "||")
 					var shops []dao.Shop
 					offset, err := strconv.Atoi(pageInfo[0])
-					if strings.HasPrefix(pageInfo[1], "<G>") {
-						shops, err = r.shopWithGeohash(ghash.Decode(strings.TrimPrefix(pageInfo[1], "<G>")))
+					if strings.HasPrefix(pageInfo[1], geoSearchPrefix) {
+						shops, err = r.shopWithGeohash(ghash.Decode(strings.TrimPrefix(pageInfo[1], geoSearchPrefix)))
+					} else if strings.HasPrefix(pageInfo[1], advSearchPrefix) {
+						shops, err = r.advSearch(strings.TrimPrefix(pageInfo[1], advSearchPrefix))
 					} else {
-						shops, err = r.shopWithTags(pageInfo[1])
+						shops, err = r.shopWithTags(strings.TrimPrefix(pageInfo[1], simpleSearchPrefix))
 					}
 					if err != nil {
 						log.Print(err)
 					}
-
+					if len(shops) == 0 {
+						log.Print("Cache hit failed, search string: ", pageInfo[1])
+						r.SendMsg(update.CallbackQuery.Message.Chat.ID, "系統錯誤，請稍後重試")
+						r.bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, update.CallbackQuery.Data))
+						continue
+					}
 					err = r.RefreshList(update.CallbackQuery.Message.Chat.ID,
 						update.CallbackQuery.Message.MessageID,
 						shops,
@@ -281,7 +292,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 					err = r.SendSingleShop(update.Message.Chat.ID, shops[0])
 				default:
 					geoHashStr := ghash.EncodeWithPrecision(update.Message.Location.Latitude, update.Message.Location.Longitude, GeohashPrecision)
-					err = r.SendList(update.Message.Chat.ID, shops, "<G>"+geoHashStr, EntriesPerPage, 0)
+					err = r.SendList(update.Message.Chat.ID, shops, geoSearchPrefix+geoHashStr, EntriesPerPage, 0)
 				}
 				if err != nil {
 					log.Print("[ERR] Telegram error: ", err)
@@ -295,23 +306,40 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 					msgBody.WriteString("🍙可直接提供座標 (📎>Location) 搜尋座標附近店舖\n\n")
 					msgBody.WriteString("🍙利用內嵌功能(在其他對話中輸入 @WongDimBot 再加上關鍵字)搜尋及分享店舖")
 					r.SendMsg(update.Message.Chat.ID, msgBody.String())
-					log.Print("[LOG] New joiner")
-				} else {
-					//Text search
-					log.Printf("Text search: %s", update.Message.Text)
-					shops, err := r.shopWithTags(update.Message.Text)
-					if err != nil {
-						r.SendMsg(update.Message.Chat.ID, "資料庫錯誤")
-						log.Println("[ERR] Database error: ", err)
+					if update.Message.Text == "/start" {
+						log.Print("[LOG] New joiner")
 					}
-					log.Printf("%d result(s) returned", len(shops))
+				} else {
+					var shops []dao.Shop
+					var err error
+					if strings.HasPrefix(update.Message.Text, "/query") { 
+						queryStr := strings.TrimPrefix(update.Message.Text, "/query ")
+						shops, err = r.advSearch(strings.TrimSpace(queryStr))
+						if err != nil {
+							r.SendMsg(update.Message.Chat.ID, "資料庫錯誤")
+							log.Println("[ERR] Database error: ", err)
+						}
+						log.Printf("Advance search: \"%s\", %d results returned", queryStr, len(shops))
+					} else {					
+						//Text search
+						shops, err = r.shopWithTags(strings.TrimSpace(update.Message.Text))
+						if err != nil {
+							r.SendMsg(update.Message.Chat.ID, "資料庫錯誤")
+							log.Println("[ERR] Database error: ", err)
+						}
+						log.Printf("Simple search: \"%s\", %d results returned", update.Message.Text, len(shops))
+					}
 					switch len(shops) {
 					case 0:
 						err = r.SendMsg(update.Message.Chat.ID, "關鍵字找不到任何結果\n可嘗試直接提供座標 (📎>Location) 搜尋座標附近店舖")
 					case 1:
 						err = r.SendSingleShop(update.Message.Chat.ID, shops[0])
 					default:
-						err = r.SendList(update.Message.Chat.ID, shops, update.Message.Text, EntriesPerPage, 0)
+						if strings.HasPrefix(update.Message.Text, "/query") {
+							err = r.SendList(update.Message.Chat.ID, shops, advSearchPrefix + strings.TrimPrefix(update.Message.Text, "/query "), EntriesPerPage, 0)
+						} else {
+							err = r.SendList(update.Message.Chat.ID, shops, simpleSearchPrefix + update.Message.Text, EntriesPerPage, 0)
+						}
 					}
 					if err != nil {
 						log.Print(err)

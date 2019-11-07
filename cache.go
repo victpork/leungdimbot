@@ -19,7 +19,7 @@ func init() {
 func (s *ServeBot) shopWithGeohash(lat, long float64) ([]dao.Shop, error) {
 	var err error
 	geohash := ghash.EncodeWithPrecision(lat, long, GeohashPrecision)
-	v, ok := cache.Get(geohash)
+	v, ok := cache.Get("<S>" + geohash)
 	var shops []dao.Shop
 	if ok {
 		shops = v.([]dao.Shop)
@@ -29,7 +29,7 @@ func (s *ServeBot) shopWithGeohash(lat, long float64) ([]dao.Shop, error) {
 			log.Println("DB err:", err)
 			return nil, err
 		}
-		cache.SetDefault(geohash, shops)
+		cache.SetDefault("<S>" + geohash, shops)
 	}
 
 	return shops, nil
@@ -37,7 +37,7 @@ func (s *ServeBot) shopWithGeohash(lat, long float64) ([]dao.Shop, error) {
 
 func (s *ServeBot) shopWithTags(keywords string) ([]dao.Shop, error) {
 	var err error
-	v, ok := cache.Get(keywords)
+	v, ok := cache.Get("<S>" + keywords)
 	var shops []dao.Shop
 	if ok {
 		shops = v.([]dao.Shop)
@@ -47,7 +47,25 @@ func (s *ServeBot) shopWithTags(keywords string) ([]dao.Shop, error) {
 			log.Println("DB err:", err)
 			return nil, err
 		}
-		cache.SetDefault(keywords, shops)
+		cache.SetDefault("<S>" + keywords, shops)
+	}
+
+	return shops, nil
+}
+
+func (s *ServeBot) advSearch(query string) ([]dao.Shop, error) {
+	var err error
+	v, ok := cache.Get("<A>" + query)
+	var shops []dao.Shop
+	if ok {
+		shops = v.([]dao.Shop)
+	} else {
+		shops, err = s.da.AdvQuery(query)
+		if err != nil {
+			log.Println("DB err:", err)
+			return nil, err
+		}
+		cache.SetDefault("<A>" + query, shops)
 	}
 
 	return shops, nil

@@ -36,6 +36,7 @@ func (s Shop) BleveType() string {
 //Backend represents an adstract data backend, which can have different
 //implementation underlying
 type Backend interface {
+	AdvQuery(query string) ([]Shop, error)
 	ShopsWithKeyword(keywords string) ([]Shop, error)
 	ShopCount() (int, error)
 	ShopByID(shopID int) (Shop, error)

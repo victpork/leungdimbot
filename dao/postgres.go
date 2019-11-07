@@ -5,6 +5,8 @@ import (
 	pgx "github.com/jackc/pgx/v4"
 	"log"
 	ghash "github.com/mmcloughlin/geohash"
+	"strings"
+	"fmt"
 )
 
 //PostgresBackend is the data backend supported by PostgresSQL database
@@ -84,7 +86,7 @@ func (pg *PostgresBackend) UpdateShopInfo(shops []Shop) error {
 func (pg *PostgresBackend) NearestShops(lat, long float64, distance string) ([]Shop, error) {
 	gHashArr := area(ghash.EncodeWithPrecision(lat, long, 7), distance)
 	rows, err := pg.conn.Query(context.Background(),
-		"SELECT shop_id, name, type, coalesce(address, ''), coalesce(url,''), geohash, district FROM shops WHERE LEFT(geohash, 7) = ANY($1) ORDER BY geohash",
+		"SELECT shop_id, name, type, coalesce(address, ''), coalesce(url,''), geohash, district FROM shops WHERE LEFT(geohash, 7) = ANY($1) order by random()",
 		gHashArr)
 	if err != nil {
 		return nil, err
@@ -105,7 +107,7 @@ func (pg *PostgresBackend) ShopsWithKeyword(keywords string) ([]Shop, error) {
 	`SELECT shop_id, name, type, coalesce(address, ''), 
 	coalesce(url,''), coalesce(geohash, ''), district, coalesce(notes, '') 
 	FROM shops WHERE (to_tsvector('cuisine', search_text) @@ plainto_tsquery('cuisine_syn', $1) OR name ILIKE '%'||$1||'%') 
-	and (address IS NOT NULL OR url IS NOT NULL)`,
+	and (address IS NOT NULL OR url IS NOT NULL) order by random()`,
 		keywords)
 	
 	if err != nil {
@@ -181,6 +183,43 @@ func (pg *PostgresBackend) AllShops() ([]Shop, error) {
 	for rows.Next() {
 		shop := Shop{}
 		err := rows.Scan(&shop.ID, &shop.Name, &shop.Type, &shop.Address, &shop.URL, &shop.Geohash, &shop.District)
+		if err != nil {
+			return nil, err
+		}
+		shoplist = append(shoplist, shop)
+	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+	return shoplist, nil
+}
+
+//AdvQuery accepts web search query from user
+func (pg *PostgresBackend) AdvQuery(query string) ([]Shop, error) {
+	//Filter out to avoid returning every entry
+	words := strings.Split(query, " ")
+	onlyHasNeg := true
+	for i:= range words {
+		if !strings.HasPrefix(words[i], "-") && strings.ToLower(words[i]) != "or" {
+			onlyHasNeg = false
+		}
+	}
+	if onlyHasNeg {
+		return nil, fmt.Errorf("%s returns too many results", query)
+	}
+	rows, err := pg.conn.Query(context.Background(),
+		`SELECT shop_id, name, type, coalesce(address, ''), 
+		coalesce(url,''), coalesce(geohash, ''), district, coalesce(notes, '') from shops 
+	    where to_tsvector('cuisine', search_text) @@ websearch_to_tsquery('cuisine_syn', $1)`, query)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	shoplist := make([]Shop, 0)
+	for rows.Next() {
+		shop := Shop{}
+		err := rows.Scan(&shop.ID, &shop.Name, &shop.Type, &shop.Address, &shop.URL, &shop.Geohash, &shop.District, &shop.Notes)
 		if err != nil {
 			return nil, err
 		}

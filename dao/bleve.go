@@ -141,6 +141,12 @@ func (b *BleveBackend) UpdateShopInfo(shops []Shop) error {
 	return nil
 }
 
+//AdvQuery accepts query string syntax (in Bleve format) and returns result
+func (b *BleveBackend) AdvQuery(query string) ([]Shop, error) {
+	q := bleve.NewQueryStringQuery(query)
+	return b.queryIndex(q)
+}
+
 // Close Bleve index
 func (b *BleveBackend) Close() error {
 	return b.index.Close()
