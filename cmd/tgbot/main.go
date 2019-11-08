@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/viper"
 	"log"
 	"fmt"
+	"io/ioutil"
 )
 
 func init() {
@@ -19,6 +20,8 @@ func init() {
 	viper.SetDefault("db.db", "wongdim")
 
 	viper.SetDefault("bleve.path", "/wongdim/datastore")
+
+	viper.SetDefault("helpfile", "/wongdim/help.txt")
 }
 
 func main() {
@@ -58,13 +61,17 @@ func main() {
 		}
 		beOptCfg = wongdim.WithBackend(blevebe)
 	}
-
+	helpContent, err := ioutil.ReadFile(viper.GetString("helpfile"))
+	if err != nil {
+		log.Fatal(err)
+	}
 	
 	bot, err := wongdim.New(
 		beOptCfg,
 		wongdim.WithTelegramAPIKey(viper.GetString("tg.key"), viper.GetBool("tg.debug")),
 		wongdim.WithWebhookURL(viper.GetString("tg.serveURL")),
 		wongdim.WithMapAPIKey(viper.GetString("googlemap.key")),
+		wongdim.WithHelpMsg(string(helpContent)),
 	)
 	if err != nil {
 		log.Fatal("Could not create bot, ", err)

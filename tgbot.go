@@ -22,6 +22,7 @@ type ServeBot struct {
 	keyFile   string
 	certFile  string
 	da        dao.Backend
+	helpMsg   string
 }
 
 // Option is a constructor argument for Retrievr
@@ -91,6 +92,13 @@ func WithBackend(backend dao.Backend) Option {
 	}
 }
 
+// WithHelpMsg supplies help message to the bot to be displayed with /help
+func WithHelpMsg(helpMsg string) Option {
+	return func(s *ServeBot) error {
+		s.helpMsg = helpMsg
+		return nil
+	}
+}
 // WithCert configure to use own cert for HTTPS communication
 func WithCert(certFile, keyFile string) Option {
 	return func(s *ServeBot) error {
@@ -300,12 +308,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 
 			case len(update.Message.Text) > 0:
 				if update.Message.Text == "/start" || update.Message.Text == "/help" {
-					msgBody := strings.Builder{}
-					msgBody.WriteString("🍙直接輸入關鍵字(以空格分隔例如「中環 咖啡」) 或店名一部份搜尋\n\n")
-					msgBody.WriteString("🍙輸入「網店」作關鍵字可搜尋沒實體店面的商戶\n\n")
-					msgBody.WriteString("🍙可直接提供座標 (📎>Location) 搜尋座標附近店舖\n\n")
-					msgBody.WriteString("🍙利用內嵌功能(在其他對話中輸入 @WongDimBot 再加上關鍵字)搜尋及分享店舖")
-					r.SendMsg(update.Message.Chat.ID, msgBody.String())
+					r.SendMsg(update.Message.Chat.ID, r.helpMsg)
 					if update.Message.Text == "/start" {
 						log.Print("[LOG] New joiner")
 					}
