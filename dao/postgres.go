@@ -9,6 +9,11 @@ import (
 	"fmt"
 )
 
+const (
+	//PostgreSQL is the type name for PostgreSQL DB
+	PostgreSQL = "pgsql"
+)
+
 //PostgresBackend is the data backend supported by PostgresSQL database
 type PostgresBackend struct {
 	//Conn is the database connection
@@ -70,7 +75,7 @@ func (pg *PostgresBackend) UpdateShopInfo(shops []Shop) error {
 	for _, shop := range shops {
 		cmdTag, err := pg.conn.Exec(context.Background(),
 			"UPDATE shops SET address = $1, geohash = $2 WHERE shop_id = $3",
-			shop.Address, shop.Geohash, shop.ID)
+			shop.Address, shop.ToGeohash(), shop.ID)
 		if err != nil {
 			log.Printf("[ERR] %e", err)
 			return err

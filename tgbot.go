@@ -32,7 +32,9 @@ const (
 	//EntriesPerPage is number of entries per display in single message
 	EntriesPerPage = 10
 	//GeohashPrecision is the no. of characters used to represent a coordinates
-	GeohashPrecision = 7
+	GeohashPrecision = 9
+	//DistanceLimit is the search area radius
+	DistanceLimit = "500m"
 
 	geoSearchPrefix = "<G>"
 	simpleSearchPrefix = "<S>"
@@ -237,7 +239,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 					var shops []dao.Shop
 					offset, err := strconv.Atoi(pageInfo[0])
 					if strings.HasPrefix(pageInfo[1], geoSearchPrefix) {
-						shops, err = r.shopWithGeohash(ghash.Decode(strings.TrimPrefix(pageInfo[1], geoSearchPrefix)))
+						shops, err = r.shopWithGeohash(strings.TrimPrefix(pageInfo[1], geoSearchPrefix), DistanceLimit)
 					} else if strings.HasPrefix(pageInfo[1], advSearchPrefix) {
 						shops, err = r.advSearch(strings.TrimPrefix(pageInfo[1], advSearchPrefix))
 					} else {
@@ -285,9 +287,8 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 			switch {
 			case update.Message.Location != nil:
 				//Posting location
-				//Get geohash
-				//geoHashStr := ghash.EncodeWithPrecision(update.Message.Location.Latitude, update.Message.Location.Longitude, GeohashPrecision)
-				shops, err := r.shopWithGeohash(update.Message.Location.Latitude, update.Message.Location.Longitude)
+				shops, err := r.shopWithCoord(update.Message.Location.Latitude, 
+					update.Message.Location.Longitude, DistanceLimit)
 				if err != nil {
 					r.SendMsg(update.Message.Chat.ID, "資料庫錯誤！請稍後再試")
 					log.Print("Database error: ", err)
@@ -443,9 +444,8 @@ func shopListMessage(shops []dao.Shop, key string, limit, offset int) (string, t
 //SendSingleShop sends single shop data to Chat, along with
 // coordinates
 func (r ServeBot) SendSingleShop(chatID int64, shop dao.Shop) error {
-	if shop.Geohash != "" {
-		box := ghash.BoundingBox(shop.Geohash)
-		lat, long := box.Center()
+	if shop.HasPhyLoc() {
+		lat, long := shop.ToCoord()
 		venue := tgbotapi.NewVenue(chatID, fmt.Sprintf("%s (%s)", shop.Name, shop.Type), shop.Address, lat, long)
 		
 		var t tgbotapi.InlineKeyboardButton

@@ -10,6 +10,11 @@ import (
 	"github.com/blevesearch/bleve/analysis/analyzer/keyword"
 )
 
+const (
+	//Bleve is the type name for Bleve search engine
+	Bleve = "bleve"
+)
+
 // BleveBackend is the data backend powered by Bleve
 type BleveBackend struct {
 	index bleve.Index

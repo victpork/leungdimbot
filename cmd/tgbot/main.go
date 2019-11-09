@@ -53,6 +53,20 @@ func main() {
 		defer db.Close()
 		log.Print("Database connected")
 		beOptCfg = wongdim.WithBackend(db)
+	case dao.PostGIS:
+		dbConnStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", 
+		viper.Get("db.host"),
+		viper.Get("db.port"),
+		viper.Get("db.user"),
+		viper.Get("db.password"),
+		viper.Get("db.db"))
+		db, err := dao.NewPostGISBackend(dbConnStr)
+		if err != nil {
+			log.Fatal("Could not connect to database", err)
+		}
+		defer db.Close()
+		log.Print("Database connected")
+		beOptCfg = wongdim.WithBackend(db)
 	case dao.Bleve:
 		//Use Bleve-based storgage
 		blevebe, err := dao.NewBleveBackend(viper.GetString("bleve.path"))

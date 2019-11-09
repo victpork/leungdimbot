@@ -4,7 +4,6 @@ import (
 	"context"
 	"equa.link/wongdim/dao"
 	"errors"
-	ghash "github.com/TomiHiltunen/geohash-golang"
 	"golang.org/x/sync/errgroup"
 	"googlemaps.github.io/maps"
 	"log"
@@ -61,14 +60,16 @@ func (gc GeocodeClient) FillGeocode(ctx context.Context, shop dao.Shop) (dao.Sho
 		log.Printf("[WRN] multiple results: Search keyword:[%s] - ID: %d", geoReq.Address, shop.ID)
 	}
 	if !res[0].PartialMatch {
-		shop.Geohash = ghash.Encode(res[0].Geometry.Location.Lat, res[0].Geometry.Location.Lng)
+		shop.Position.Lat = res[0].Geometry.Location.Lat
+		shop.Position.Long = res[0].Geometry.Location.Lng
 		if len(shop.Address) == 0 {
 			shop.Address = res[0].FormattedAddress
 		}
 	} else {
 		log.Printf("Partial address: Search keyword:[%s] - ID: %d", geoReq.Address, shop.ID)
 		if (useOriginalAddr) {
-			shop.Geohash = ghash.Encode(res[0].Geometry.Location.Lat, res[0].Geometry.Location.Lng)
+			shop.Position.Lat = res[0].Geometry.Location.Lat
+			shop.Position.Long = res[0].Geometry.Location.Lng
 		} else {
 			return shop, errors.New("Received partial address")
 		}

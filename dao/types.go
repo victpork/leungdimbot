@@ -2,13 +2,10 @@ package dao
 
 import (
 	"fmt"
+	ghash "github.com/mmcloughlin/geohash"
 )
 
 const (
-	//PostgreSQL is the type name for PostgreSQL DB
-	PostgreSQL = "pgsql"
-	//Bleve is the type name for Bleve search engine
-	Bleve = "bleve"
 	//Type for non-physical (network) store
 	nonPhyStore = "網店"
 )
@@ -18,11 +15,19 @@ type Shop struct {
 	Name     string //Shop name 
 	Address  string //Shop address
 	Geohash  string //Geohash code for lat/long coordinates
+	Position Coord //Position is the numeric representation of the shop coordinates
 	Type 	 string //Shop type
 	District string  //Where is the shop?
 	URL      string  //URL, currently unused
 	Tags     []string //Tags used
 	Notes    string  //Notes for the shop
+	Distance int //Distance in metres
+}
+
+//Coord represents a point on Earth
+type Coord struct {
+	Lat float64
+	Long float64
 }
 
 func (s Shop) String() string {
@@ -33,6 +38,32 @@ func (s Shop) String() string {
 func (s Shop) BleveType() string {
 	return "Shop"
 }
+
+//ToGeohash returns geohash representation of shop's location
+func (s Shop) ToGeohash() string {
+	if s.Geohash != "" {
+		return s.Geohash
+	} else if s.Position != (Coord{}) {
+		return ghash.Encode(s.Position.Lat, s.Position.Long)
+	}
+	return ""
+}
+
+//ToCoord returns coordinte representation (lat, long) of shop's location
+func (s Shop) ToCoord() (lat, long float64) {
+	if s.Position != (Coord{}) {
+		return s.Position.Lat, s.Position.Long
+	} else if s.Geohash != "" {
+		return ghash.DecodeCenter(s.Geohash)
+	}
+	return 0, 0
+}
+
+//HasPhyLoc returns true if the shop has a physical location, i.e. either Geohash or coordinates
+func (s Shop) HasPhyLoc() bool {
+	return s.Geohash != "" || s.Position != (Coord{})
+}
+
 //Backend represents an adstract data backend, which can have different
 //implementation underlying
 type Backend interface {
