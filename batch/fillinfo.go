@@ -113,9 +113,10 @@ func batchController(ctx context.Context, errCh chan<- error) {
 			for s0 := range inCh {
 				var s1 dao.Shop
 				var err error
-				if s0.Geohash == "" {
+				if !s0.HasPhyLoc() {
 					s1, err = gCodeFunc(ctx, s0)
-					log.Printf("Updated %s with address %s and geohash %s", s1.Name, s1.Address, s1.Geohash)
+					lat, long := s1.ToCoord()
+					log.Printf("Updated %s with address %s and cooridinates(%f, %f)", s1.Name, s1.Address, lat, long)
 				}
 				if err != nil {
 					// Since returning error would kill the group, we push error to the

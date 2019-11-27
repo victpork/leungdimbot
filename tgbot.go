@@ -171,9 +171,14 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 			if strings.TrimSpace(update.InlineQuery.Query) == "" {
 				continue
 			}
-			log.Printf("[LOG] Inline query: %s", strings.TrimSpace(update.InlineQuery.Query))
+			if strings.Contains(strings.ToLower(update.InlineQuery.Query), "drop table") {
+				log.Printf("[ALRT] %s(%d)(%s %s)[%s] is trying to do SQL injection \"%s\"", update.InlineQuery.From, 
+				update.InlineQuery.From.ID, update.InlineQuery.From.FirstName, update.InlineQuery.From.LastName,
+				update.InlineQuery.From.LanguageCode, strings.TrimSpace(update.InlineQuery.Query))
+				continue
+			}
 			shops, err := r.shopWithTags(strings.TrimSpace(update.InlineQuery.Query))
-			log.Printf("[LOG] %d result(s) returned", len(shops))
+			log.Printf("[LOG] Inline query %s, %d result(s) returned", strings.TrimSpace(update.InlineQuery.Query), len(shops))
 			if err != nil {
 				log.Printf("[ERR] Database error: %v", err)
 				continue
@@ -185,9 +190,8 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 			} 
 			result := make([]interface{}, len(shops))
 			for i := range shops {
-				if shops[i].Geohash != "" {
-					box := ghash.BoundingBox(shops[i].Geohash)
-					lat, long := box.Center()
+				if shops[i].HasPhyLoc() {
+					lat, long := shops[i].ToCoord()
 					r := tgbotapi.NewInlineQueryResultLocation(
 						update.InlineQuery.Query+strconv.Itoa(shops[i].ID), shops[i].String(), lat, long)
 					r.InputMessageContent = tgbotapi.InputVenueMessageContent{
@@ -199,9 +203,9 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 					var t tgbotapi.InlineKeyboardButton
 					if shops[i].URL != "" {
 						t = tgbotapi.NewInlineKeyboardButtonURL("🏠店舖網站", shops[i].URL)
-					} else {
-						t = tgbotapi.NewInlineKeyboardButtonURL("🔍Google 店名", "https://google.com/search?q="+url.PathEscape(shops[i].Name))
 					}
+					t = tgbotapi.NewInlineKeyboardButtonURL("🔍Google 店名", "https://google.com/search?q="+url.PathEscape(shops[i].Name))
+					
 					l := tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(t))
 					r.ReplyMarkup = &l
 					result[i] = r
@@ -326,6 +330,12 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 						log.Printf("Advance search: \"%s\", %d results returned", queryStr, len(shops))
 					} else {					
 						//Text search
+						if strings.Contains(strings.ToLower(update.Message.Text), "drop table") {
+							log.Printf("[ALRT] %s(%d)(%s %s)[%s] is trying to do SQL injection", update.Message.From, 
+							update.Message.From.ID, update.Message.From.FirstName, update.Message.From.LastName,
+							update.Message.From.LanguageCode)
+							continue
+						}
 						shops, err = r.shopWithTags(strings.TrimSpace(update.Message.Text))
 						if err != nil {
 							r.SendMsg(update.Message.Chat.ID, "資料庫錯誤")
