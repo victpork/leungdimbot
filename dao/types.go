@@ -76,3 +76,9 @@ type Backend interface {
 	ShopMissingInfo() ([]Shop, error)
 	Close() error
 }
+
+//TaggedBackend are datasources with separate function to update tags after input 
+type TaggedBackend interface {
+	Backend
+	UpdateTags() (int, error)
+}

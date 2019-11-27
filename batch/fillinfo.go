@@ -152,7 +152,7 @@ func batchController(ctx context.Context, errCh chan<- error) {
 	if err != nil {
 		errCh <- err
 	}
-	pg, ok := da.(*dao.PostgresBackend)
+	pg, ok := da.(dao.TaggedBackend)
 	if ok {
 		res, err := pg.UpdateTags()
 		if err != nil {
