@@ -1,7 +1,7 @@
 package wongdim
 
 import (
-	"log"
+	log "github.com/sirupsen/logrus"
 	"equa.link/wongdim/dao"
 	gcache "github.com/patrickmn/go-cache"
 	ghash "github.com/mmcloughlin/geohash"
@@ -27,7 +27,7 @@ func (s *ServeBot) shopWithGeohash(geohash, distance string) ([]dao.Shop, error)
 		lat, long := ghash.DecodeCenter(geohash)
 		shops, err = s.da.NearestShops(lat, long, distance)
 		if err != nil {
-			log.Println("DB err:", err)
+			log.WithError(err).Error("Database error")
 			return nil, err
 		}
 		cache.SetDefault("<G>" + geohash, shops)
@@ -46,7 +46,7 @@ func (s *ServeBot) shopWithCoord(lat, long float64, distance string) ([]dao.Shop
 	} else {
 		shops, err = s.da.NearestShops(lat, long, distance)
 		if err != nil {
-			log.Println("DB err:", err)
+			log.WithError(err).Error("Database error")
 			return nil, err
 		}
 		cache.SetDefault("<G>" + geohash, shops)
@@ -64,7 +64,7 @@ func (s *ServeBot) shopWithTags(keywords string) ([]dao.Shop, error) {
 	} else {
 		shops, err = s.da.ShopsWithKeyword(keywords)
 		if err != nil {
-			log.Println("DB err:", err)
+			log.WithError(err).Error("Database error")
 			return nil, err
 		}
 		cache.SetDefault("<S>" + keywords, shops)
@@ -82,7 +82,7 @@ func (s *ServeBot) advSearch(query string) ([]dao.Shop, error) {
 	} else {
 		shops, err = s.da.AdvQuery(query)
 		if err != nil {
-			log.Println("DB err:", err)
+			log.WithError(err).Error("Database error")
 			return nil, err
 		}
 		cache.SetDefault("<A>" + query, shops)

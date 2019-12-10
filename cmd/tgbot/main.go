@@ -4,7 +4,8 @@ import (
 	"equa.link/wongdim"
 	"equa.link/wongdim/dao"
 	"github.com/spf13/viper"
-	"log"
+	log "github.com/sirupsen/logrus"
+	"github.com/orandin/lumberjackrus"
 	"fmt"
 	"io/ioutil"
 )
@@ -22,6 +23,26 @@ func init() {
 	viper.SetDefault("bleve.path", "/wongdim/datastore")
 
 	viper.SetDefault("helpfile", "/wongdim/help.txt")
+
+	hook, err := lumberjackrus.NewHook(
+		&lumberjackrus.LogFile{
+			Filename:   "/wongdim/log/access.log",
+			MaxSize:    100,
+			MaxBackups: 10,
+			MaxAge:     1,
+			Compress:   false,
+			LocalTime:  false,
+		},
+		log.InfoLevel,
+		&log.JSONFormatter{},
+		&lumberjackrus.LogFileOpts{},
+	)
+
+	if err != nil {
+		log.WithError(err).Error("Cannot create file log hook")
+	} else {
+		log.AddHook(hook)
+	}
 }
 
 func main() {
@@ -30,11 +51,12 @@ func main() {
 	viper.AddConfigPath(".")
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix("WDIM")
-	
+
 	err := viper.ReadInConfig() // Find and read the config file
 	if err != nil { // Handle errors reading the config file
-		log.Printf("Config file not detected: %s \n", err)
+		log.WithError(err).Error("Config file not found")
 	}
+
 	var beOptCfg wongdim.Option
 	beType := viper.Get("backendType")
 	switch beType{
@@ -48,10 +70,10 @@ func main() {
 		viper.Get("db.db"))
 		db, err := dao.NewPostgresBackend(dbConnStr)
 		if err != nil {
-			log.Fatal("Could not connect to database", err)
+			log.WithError(err).Fatal("Could not connect to database")
 		}
 		defer db.Close()
-		log.Print("Database connected")
+		log.Info("Database connected")
 		beOptCfg = wongdim.WithBackend(db)
 	case dao.PostGIS:
 		dbConnStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", 
@@ -62,22 +84,22 @@ func main() {
 		viper.Get("db.db"))
 		db, err := dao.NewPostGISBackend(dbConnStr)
 		if err != nil {
-			log.Fatal("Could not connect to database", err)
+			log.WithError(err).Fatal("Could not connect to database")
 		}
 		defer db.Close()
-		log.Print("Database connected")
+		log.Info("Database connected")
 		beOptCfg = wongdim.WithBackend(db)
 	case dao.Bleve:
 		//Use Bleve-based storgage
 		blevebe, err := dao.NewBleveBackend(viper.GetString("bleve.path"))
 		if err != nil {
-			log.Fatal("Could not create index", err)
+			log.WithError(err).Fatal("Could not create index")
 		}
 		beOptCfg = wongdim.WithBackend(blevebe)
 	}
 	helpContent, err := ioutil.ReadFile(viper.GetString("helpfile"))
 	if err != nil {
-		log.Fatal(err)
+		log.WithError(err).Fatal("Cannot read help file")
 	}
 	
 	bot, err := wongdim.New(
@@ -88,7 +110,7 @@ func main() {
 		wongdim.WithHelpMsg(string(helpContent)),
 	)
 	if err != nil {
-		log.Fatal("Could not create bot, ", err)
+		log.WithError(err).Fatal("Could not create TG bot")
 	}
 	bot.Listen()
 }

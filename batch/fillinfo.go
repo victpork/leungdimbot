@@ -6,7 +6,7 @@ import (
 	"errors"
 	"golang.org/x/sync/errgroup"
 	"googlemaps.github.io/maps"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -49,15 +49,23 @@ func (gc GeocodeClient) FillGeocode(ctx context.Context, shop dao.Shop) (dao.Sho
 	defer cancel()
 	res, err := gc.c.Geocode(cCtx, &geoReq)
 	if err != nil {
-		log.Println("fatal error", err)
+		log.WithError(err).Error("Geocode request failed")
 		return shop, err
 	}
 	if len(res) == 0 {
-		log.Printf("[ERR] No results found: Search keyword:[%s] - ID: %d", geoReq.Address, shop.ID)
+		log.WithFields(log.Fields{
+			"shopID": shop.ID,
+			"shopName": shop.Name,
+			"address": geoReq.Address,
+		}).Error("No results found")
 		return shop, errors.New("No results found")
 	}
 	if len(res) > 1 {
-		log.Printf("[WRN] multiple results: Search keyword:[%s] - ID: %d", geoReq.Address, shop.ID)
+		log.WithFields(log.Fields{
+			"shopID": shop.ID,
+			"shopName": shop.Name,
+			"address": geoReq.Address,
+		}).Warn("Multiple results returned from Google")
 	}
 	if !res[0].PartialMatch {
 		shop.Position.Lat = res[0].Geometry.Location.Lat
@@ -66,7 +74,11 @@ func (gc GeocodeClient) FillGeocode(ctx context.Context, shop dao.Shop) (dao.Sho
 			shop.Address = res[0].FormattedAddress
 		}
 	} else {
-		log.Printf("Partial address: Search keyword:[%s] - ID: %d", geoReq.Address, shop.ID)
+		log.WithFields(log.Fields{
+			"shopID": shop.ID,
+			"shopName": shop.Name,
+			"address": geoReq.Address,
+		}).Warn("Partial address returned from Google")
 		if (useOriginalAddr) {
 			shop.Position.Lat = res[0].Geometry.Location.Lat
 			shop.Position.Long = res[0].Geometry.Location.Lng
@@ -116,7 +128,12 @@ func batchController(ctx context.Context, errCh chan<- error) {
 				if !s0.HasPhyLoc() {
 					s1, err = gCodeFunc(ctx, s0)
 					lat, long := s1.ToCoord()
-					log.Printf("Updated %s with address %s and cooridinates(%f, %f)", s1.Name, s1.Address, lat, long)
+					log.WithFields(log.Fields{
+						"shopName": s1.Name,
+						"address": s1.Address,
+						"lat": lat,
+						"long": long,
+					}).Info("Updated shop addresses and location")
 				}
 				if err != nil {
 					// Since returning error would kill the group, we push error to the
@@ -142,13 +159,13 @@ func batchController(ctx context.Context, errCh chan<- error) {
 	go func() {
 		grp.Wait()
 		close(resultCh)
-		log.Print("All channels closed")
+		log.Debug("All channels closed")
 	}()
 	resultList := make([]dao.Shop, 0)
 	for shop := range resultCh {
 		resultList = append(resultList, shop)
 	}
-	log.Printf("Writing %d shops info into database...", len(resultList))
+	log.WithField("affectedRows", len(resultList)).Info("Updated shops info into database", )
 	err = da.UpdateShopInfo(resultList)
 	if err != nil {
 		errCh <- err
@@ -159,7 +176,7 @@ func batchController(ctx context.Context, errCh chan<- error) {
 		if err != nil {
 			errCh <- err
 		} else {
-			log.Printf("%d rows updated with tags", res)
+			log.WithField("affectedRows", res).Printf("Updating rows with tags")
 		}
 	}
 

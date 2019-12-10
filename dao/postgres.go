@@ -3,7 +3,7 @@ package dao
 import (
 	"context"
 	pgx "github.com/jackc/pgx/v4"
-	"log"
+	log "github.com/sirupsen/logrus"
 	ghash "github.com/mmcloughlin/geohash"
 	"strings"
 	"fmt"
@@ -77,7 +77,7 @@ func (pg *PostgresBackend) UpdateShopInfo(shops []Shop) error {
 			"UPDATE shops SET address = $1, geohash = $2 WHERE shop_id = $3",
 			shop.Address, shop.ToGeohash(), shop.ID)
 		if err != nil {
-			log.Printf("[ERR] %e", err)
+			log.WithError(err).Error("Update shop info error")
 			return err
 		}
 		rowsAffected += cmdTag.RowsAffected()
@@ -122,7 +122,7 @@ func (pg *PostgresBackend) ShopsWithKeyword(keywords string) ([]Shop, error) {
 	shoplist := make([]Shop, 0)
 	for rows.Next() {
 		shop := Shop{}
-		err := rows.Scan(&shop.ID, 
+		rows.Scan(&shop.ID, 
 			&shop.Name, 
 			&shop.Type, 
 			&shop.Address, 
@@ -131,9 +131,6 @@ func (pg *PostgresBackend) ShopsWithKeyword(keywords string) ([]Shop, error) {
 			&shop.District,
 			&shop.Notes,
 		)
-		if err != nil {
-			log.Println(err)
-		}
 		shoplist = append(shoplist, shop)
 	}
 	return shoplist, nil

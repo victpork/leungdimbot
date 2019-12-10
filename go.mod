@@ -5,7 +5,6 @@ go 1.13
 require (
 	github.com/PuerkitoBio/goquery v1.5.0 // indirect
 	github.com/RoaringBitmap/roaring v0.4.21 // indirect
-	github.com/TomiHiltunen/geohash-golang v0.0.0-20150112065804-b3e4e625abfb
 	github.com/antchfx/htmlquery v1.1.0 // indirect
 	github.com/antchfx/xmlquery v1.1.0 // indirect
 	github.com/antchfx/xpath v1.1.0 // indirect
@@ -25,15 +24,16 @@ require (
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gocolly/colly v1.2.0
 	github.com/google/uuid v1.1.1 // indirect
-	github.com/hashicorp/golang-lru v0.5.3
 	github.com/jackc/pgx/v4 v4.1.2
 	github.com/jmhodges/levigo v1.0.0 // indirect
 	github.com/kennygrant/sanitize v1.2.4 // indirect
 	github.com/mmcloughlin/geohash v0.9.0
+	github.com/orandin/lumberjackrus v1.0.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/remyoudompheng/bigfft v0.0.0-20190728182440-6a916e37a237 // indirect
 	github.com/saintfish/chardet v0.0.0-20120816061221-3af4cd4741ca // indirect
 	github.com/sergi/go-diff v1.0.0 // indirect
+	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/viper v1.4.0
 	github.com/steveyen/gtreap v0.0.0-20150807155958-0abe01ef9be2 // indirect
 	github.com/syndtr/goleveldb v1.0.0 // indirect
@@ -41,5 +41,7 @@ require (
 	github.com/technoweenie/multipartstreamer v1.0.1 // indirect
 	github.com/temoto/robotstxt v1.1.1 // indirect
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
+	golang.org/x/sys v0.0.0-20191128015809-6d18c012aee9 // indirect
 	googlemaps.github.io/maps v0.0.0-20190909213747-3c037358a0f0
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 )

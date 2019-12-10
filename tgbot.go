@@ -7,11 +7,11 @@ import (
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	ghash "github.com/mmcloughlin/geohash"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
-	"net/url"
 )
 
 // ServeBot is the bot construct for serving shops info
@@ -36,9 +36,9 @@ const (
 	//DistanceLimit is the search area radius
 	DistanceLimit = "500m"
 
-	geoSearchPrefix = "<G>"
+	geoSearchPrefix    = "<G>"
 	simpleSearchPrefix = "<S>"
-	advSearchPrefix = "<A>"
+	advSearchPrefix    = "<A>"
 )
 
 // New return new instance of ServeBot
@@ -54,8 +54,8 @@ func New(options ...Option) (r *ServeBot, err error) {
 		return nil, fmt.Errorf("Datastore undefined")
 	}
 	shopCnt, err := r.da.ShopCount()
-	log.Printf("[LOG] Database loaded with %d shop(s)", shopCnt)
-	log.Printf("[LOG] Authorized on account %s", r.bot.Self.UserName)
+	log.WithField("shopCount", shopCnt).Info("Data loaded")
+	log.WithField("accountName", r.bot.Self.UserName).Info("Authorized on account")
 	return r, nil
 }
 
@@ -101,6 +101,7 @@ func WithHelpMsg(helpMsg string) Option {
 		return nil
 	}
 }
+
 // WithCert configure to use own cert for HTTPS communication
 func WithCert(certFile, keyFile string) Option {
 	return func(s *ServeBot) error {
@@ -112,7 +113,7 @@ func WithCert(certFile, keyFile string) Option {
 
 //Listen start the bot to listen to request
 func (r *ServeBot) Listen() error {
-	log.Printf("[LOG] Listening on URL: %s/%s", r.url, r.bot.Token)
+	log.WithField("url", r.url+"/"+r.bot.Token).Info("Service started and listening")
 	_, err := r.bot.SetWebhook(tgbotapi.NewWebhook(r.url + "/" + r.bot.Token))
 	if err != nil {
 		return err
@@ -122,7 +123,7 @@ func (r *ServeBot) Listen() error {
 		log.Fatal(err)
 	}
 	if info.LastErrorDate != 0 {
-		log.Printf("[ERR] Telegram callback failed: %s", info.LastErrorMessage)
+		log.Errorf("Telegram callback failed: %s", info.LastErrorMessage)
 	}
 	updates := r.bot.ListenForWebhook("/" + r.bot.Token)
 	for i := 0; i < 5; i++ {
@@ -136,7 +137,7 @@ func (r *ServeBot) Listen() error {
 
 		go func() {
 			for e := range errCh {
-				log.Printf("[ERR] Batch error: %s", e)
+				log.WithError(e).Error("Batch error")
 			}
 		}()
 
@@ -172,22 +173,31 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 				continue
 			}
 			if strings.Contains(strings.ToLower(update.InlineQuery.Query), "drop table") {
-				log.Printf("[ALRT] %s(%d)(%s %s)[%s] is trying to do SQL injection \"%s\"", update.InlineQuery.From, 
-				update.InlineQuery.From.ID, update.InlineQuery.From.FirstName, update.InlineQuery.From.LastName,
-				update.InlineQuery.From.LanguageCode, strings.TrimSpace(update.InlineQuery.Query))
+				log.WithFields(
+					log.Fields{
+						"query":    strings.TrimSpace(update.InlineQuery.Query),
+						"lang":     update.InlineQuery.From.LanguageCode,
+						"fullName": update.InlineQuery.From.FirstName + " " + update.InlineQuery.From.LastName,
+						"userName": update.InlineQuery.From,
+						"userID":   update.InlineQuery.From.ID,
+					}).Warn("SQL injection detected")
 				continue
 			}
 			shops, err := r.shopWithTags(strings.TrimSpace(update.InlineQuery.Query))
-			log.Printf("[LOG] Inline query %s, %d result(s) returned", strings.TrimSpace(update.InlineQuery.Query), len(shops))
+			log.WithFields(
+				log.Fields{
+					"query":     strings.TrimSpace(update.InlineQuery.Query),
+					"resultCnt": len(shops),
+				}).Info("Inline query")
 			if err != nil {
-				log.Printf("[ERR] Database error: %v", err)
+				log.WithError(err).Error("Database error")
 				continue
 			}
 			orgLen := len(shops)
 			if orgLen > 50 {
 				//Paging, telegram does not support over 50 inline results
 				shops = shops[offset:min(orgLen, offset+50)]
-			} 
+			}
 			result := make([]interface{}, len(shops))
 			for i := range shops {
 				if shops[i].HasPhyLoc() {
@@ -205,20 +215,20 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 						t = tgbotapi.NewInlineKeyboardButtonURL("🏠店舖網站", shops[i].URL)
 					}
 					t = tgbotapi.NewInlineKeyboardButtonURL("🔍Google 店名", "https://google.com/search?q="+url.PathEscape(shops[i].Name))
-					
+
 					l := tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(t))
 					r.ReplyMarkup = &l
 					result[i] = r
 				} else {
 					r := tgbotapi.NewInlineQueryResultArticleMarkdown(
-						update.InlineQuery.Query+strconv.Itoa(shops[i].ID), 
+						update.InlineQuery.Query+strconv.Itoa(shops[i].ID),
 						fmt.Sprintf("%s - (%s)", shops[i].String(), shops[i].District),
-						fmt.Sprintf("%s - (%s)", shops[i].String(), shops[i].District) + shops[i].URL, 
+						fmt.Sprintf("%s - (%s)", shops[i].String(), shops[i].District)+shops[i].URL,
 					)
 					r.URL = shops[i].URL
 					result[i] = r
 				}
-				
+
 			}
 
 			inlineCfg := tgbotapi.InlineConfig{
@@ -226,8 +236,8 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 				IsPersonal:    true,
 				Results:       result,
 			}
-			if offset+50 < orgLen { 
-				inlineCfg.NextOffset = strconv.Itoa(offset+50)
+			if offset+50 < orgLen {
+				inlineCfg.NextOffset = strconv.Itoa(offset + 50)
 			}
 			_, err = r.bot.AnswerInlineQuery(inlineCfg)
 		case update.CallbackQuery != nil:
@@ -250,10 +260,10 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 						shops, err = r.shopWithTags(strings.TrimPrefix(pageInfo[1], simpleSearchPrefix))
 					}
 					if err != nil {
-						log.Print(err)
+						log.WithError(err).Error("Database query error")
 					}
 					if len(shops) == 0 {
-						log.Print("Cache hit failed, search string: ", pageInfo[1])
+						log.WithField("query", pageInfo[1]).Error("Cache hit failed")
 						r.SendMsg(update.CallbackQuery.Message.Chat.ID, "系統錯誤，請稍後重試")
 						r.bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, update.CallbackQuery.Data))
 						continue
@@ -265,20 +275,25 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 						EntriesPerPage, offset,
 					)
 					if err != nil {
-						log.Print("[ERR] Telegram error: ", err)
+						log.WithError(err).Error("Telegram error")
 					}
 				} else {
 					//Pick an item and post its detail, behaves same as picking
 					//single item
 					itemID, err := strconv.Atoi(update.CallbackQuery.Data)
 					if err != nil {
-						log.Printf("[ERR] Unexpected data: %s, %v", update.CallbackQuery.Data, err)
+						log.WithError(err).WithField("callbackData", update.CallbackQuery.Data).Printf("Unexpected callback data")
 					} else {
 						result, err := r.da.ShopByID(itemID)
-						log.Printf("[LOG] Single shop %d selected: (%s)", itemID, result.Name)
+						log.WithFields(log.Fields{
+							"shopID": itemID,
+							"shopName": result.Name,
+						}).Info("Single shop selected")
 						if err != nil {
 							r.SendMsg(update.CallbackQuery.Message.Chat.ID, "資料庫錯誤! 找不到店舖")
-							log.Printf("[LOG] Shop not found: %d, %v", itemID, err)
+							log.WithFields(log.Fields{
+								"shopID": itemID,
+							}).WithError(err).Error("Shop not found")
 						} else {
 							r.SendSingleShop(update.CallbackQuery.Message.Chat.ID, result)
 						}
@@ -291,13 +306,13 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 			switch {
 			case update.Message.Location != nil:
 				//Posting location
-				shops, err := r.shopWithCoord(update.Message.Location.Latitude, 
+				shops, err := r.shopWithCoord(update.Message.Location.Latitude,
 					update.Message.Location.Longitude, DistanceLimit)
 				if err != nil {
 					r.SendMsg(update.Message.Chat.ID, "資料庫錯誤！請稍後再試")
-					log.Print("Database error: ", err)
+					log.WithError(err).Error("Database error")
 				}
-				log.Printf("Location search, %d result(s) returned", len(shops))
+				log.WithField("resultCnt", len(shops)).Info("Location search")
 				switch len(shops) {
 				case 0:
 					err = r.SendMsg(update.Message.Chat.ID, "附近找不到店舖！")
@@ -308,40 +323,51 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 					err = r.SendList(update.Message.Chat.ID, shops, geoSearchPrefix+geoHashStr, EntriesPerPage, 0)
 				}
 				if err != nil {
-					log.Print("[ERR] Telegram error: ", err)
+					log.WithError(err).Error("Telegram error")
 				}
 
 			case len(update.Message.Text) > 0:
 				if update.Message.Text == "/start" || update.Message.Text == "/help" {
 					r.SendMsg(update.Message.Chat.ID, r.helpMsg)
 					if update.Message.Text == "/start" {
-						log.Print("[LOG] New joiner")
+						log.Info("New joiner")
 					}
 				} else {
 					var shops []dao.Shop
 					var err error
-					if strings.HasPrefix(update.Message.Text, "/query") { 
+					if strings.HasPrefix(update.Message.Text, "/query") {
 						queryStr := strings.TrimPrefix(update.Message.Text, "/query ")
 						shops, err = r.advSearch(strings.TrimSpace(queryStr))
 						if err != nil {
 							r.SendMsg(update.Message.Chat.ID, "資料庫錯誤")
-							log.Println("[ERR] Database error: ", err)
+							log.WithError(err).Error("Database error")
 						}
-						log.Printf("Advance search: \"%s\", %d results returned", queryStr, len(shops))
-					} else {					
+						log.WithFields(log.Fields{
+							"query": queryStr,
+							"resultCnt": len(shops),
+						}).Info("Advance search")
+					} else {
 						//Text search
 						if strings.Contains(strings.ToLower(update.Message.Text), "drop table") {
-							log.Printf("[ALRT] %s(%d)(%s %s)[%s] is trying to do SQL injection", update.Message.From, 
-							update.Message.From.ID, update.Message.From.FirstName, update.Message.From.LastName,
-							update.Message.From.LanguageCode)
+							log.WithFields(
+								log.Fields{
+									"query":    strings.TrimSpace(update.Message.Text),
+									"lang":     update.Message.From.LanguageCode,
+									"fullName": update.Message.From.FirstName + " " + update.Message.From.LastName,
+									"userName": update.Message.From,
+									"userID":   update.Message.From.ID,
+								}).Warn("SQL injection detected")
 							continue
 						}
 						shops, err = r.shopWithTags(strings.TrimSpace(update.Message.Text))
 						if err != nil {
 							r.SendMsg(update.Message.Chat.ID, "資料庫錯誤")
-							log.Println("[ERR] Database error: ", err)
+							log.WithError(err).Error("Database error")
 						}
-						log.Printf("Simple search: \"%s\", %d results returned", update.Message.Text, len(shops))
+						log.WithFields(log.Fields{
+							"query": update.Message.Text,
+							"resultCnt": len(shops),
+						}).Printf("Simple search")
 					}
 					switch len(shops) {
 					case 0:
@@ -350,13 +376,13 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 						err = r.SendSingleShop(update.Message.Chat.ID, shops[0])
 					default:
 						if strings.HasPrefix(update.Message.Text, "/query") {
-							err = r.SendList(update.Message.Chat.ID, shops, advSearchPrefix + strings.TrimPrefix(update.Message.Text, "/query "), EntriesPerPage, 0)
+							err = r.SendList(update.Message.Chat.ID, shops, advSearchPrefix+strings.TrimPrefix(update.Message.Text, "/query "), EntriesPerPage, 0)
 						} else {
-							err = r.SendList(update.Message.Chat.ID, shops, simpleSearchPrefix + update.Message.Text, EntriesPerPage, 0)
+							err = r.SendList(update.Message.Chat.ID, shops, simpleSearchPrefix+update.Message.Text, EntriesPerPage, 0)
 						}
 					}
 					if err != nil {
-						log.Print(err)
+						log.WithError(err).Error("Telegram error")
 					}
 				}
 			}
@@ -408,7 +434,7 @@ func (r ServeBot) SendList(chatID int64, shops []dao.Shop, key string, limit, of
 func shopListMessage(shops []dao.Shop, key string, limit, offset int) (string, tgbotapi.InlineKeyboardMarkup) {
 	msgBody := strings.Builder{}
 	// Do paging
-	pageInd := fmt.Sprintf("%d/%d", offset/EntriesPerPage+1, (len(shops) + EntriesPerPage - 1) / EntriesPerPage)
+	pageInd := fmt.Sprintf("%d/%d", offset/EntriesPerPage+1, (len(shops)+EntriesPerPage-1)/EntriesPerPage)
 	pagedShop := shops[offset:min(len(shops), offset+limit)]
 	btns := make([]tgbotapi.InlineKeyboardButton, 0, len(pagedShop))
 	// Generate message body and nav buttons
@@ -457,7 +483,7 @@ func (r ServeBot) SendSingleShop(chatID int64, shop dao.Shop) error {
 	if shop.HasPhyLoc() {
 		lat, long := shop.ToCoord()
 		venue := tgbotapi.NewVenue(chatID, fmt.Sprintf("%s (%s)", shop.Name, shop.Type), shop.Address, lat, long)
-		
+
 		var t tgbotapi.InlineKeyboardButton
 		if shop.URL != "" {
 			t = tgbotapi.NewInlineKeyboardButtonURL("🏠店舖網站", shop.URL)

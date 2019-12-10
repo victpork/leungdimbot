@@ -3,7 +3,7 @@ package main
 import (
 	"equa.link/wongdim/dao"
 	"github.com/spf13/viper"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"fmt"
 )
 
@@ -28,7 +28,7 @@ func main() {
 
 	err := viper.ReadInConfig() // Find and read the config file
 	if err != nil { // Handle errors reading the config file
-		log.Printf("Config file not detected: %s \n", err)
+		log.WithError(err).Error("Config file not found")
 	}
 
 	dbConnStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", 
@@ -39,24 +39,24 @@ func main() {
 		viper.Get("db.db"))
 	db, err := dao.NewPostgresBackend(dbConnStr)
 	if err != nil {
-		log.Fatal("Could not connect to database", err)
+		log.WithError(err).Fatal("Could not connect to database")
 	}
 	defer db.Close()
-	log.Print("Database connected")
+	log.Info("Database connected")
 
 	blevebe, err := dao.NewBleveBackend(viper.GetString("bleve.path"))
 	if err != nil {
-		log.Fatal("Could not create index: ", err)
+		log.WithError(err).Fatal("Could not create index")
 	}
 	defer blevebe.Close()
 	shops, err := db.AllShops()
 	if err != nil {
-		log.Fatal("Could not extract shops from database: ", err)
+		log.WithError(err).Fatal("Could not extract shops from database")
 	}
 	log.Printf("%d rows extracted", len(shops))
 	err = blevebe.UpdateShopInfo(shops)
 	if err != nil {
-		log.Fatal("Could not import shops into bleve store: ", err)
+		log.WithError(err).Fatal("Could not import shops into bleve store")
 	}
-	log.Print("Done")
+	log.Info("Done")
 }

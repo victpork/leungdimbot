@@ -1,7 +1,7 @@
 package dao
 
 import (
-	"log"
+	log "github.com/sirupsen/logrus"
 	"context"
 	"strings"
 	"strconv"
@@ -72,13 +72,13 @@ func (pg *PostGISBackend) UpdateShopInfo(shops []Shop) error {
 			"UPDATE shops SET address = $1, geog = ST_MakePoint($2, $3)::geography WHERE shop_id = $4",
 			shop.Address, long, lat, shop.ID)
 		if err != nil {
-			log.Printf("[ERR] %e", err)
+			log.WithError(err).Error("Database error")
 			return err
 		}
 		rowsAffected += cmdTag.RowsAffected()
 	}
-
 	tx.Commit(context.Background())
+	log.WithField("rowsAffected", rowsAffected).Info("Shop info updated")
 	return err
 }
 
@@ -144,7 +144,7 @@ func (pg *PostGISBackend) ShopsWithKeyword(keywords string) ([]Shop, error) {
 	shoplist := make([]Shop, 0)
 	for rows.Next() {
 		shop := Shop{}
-		err := rows.Scan(&shop.ID, 
+		rows.Scan(&shop.ID, 
 			&shop.Name, 
 			&shop.Type, 
 			&shop.Address, 
@@ -154,9 +154,6 @@ func (pg *PostGISBackend) ShopsWithKeyword(keywords string) ([]Shop, error) {
 			&shop.District,
 			&shop.Notes,
 		)
-		if err != nil {
-			log.Println(err)
-		}
 		shoplist = append(shoplist, shop)
 	}
 	return shoplist, nil
