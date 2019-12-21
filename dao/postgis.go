@@ -133,7 +133,7 @@ func (pg *PostGISBackend) ShopsWithKeyword(keywords string) ([]Shop, error) {
 	rows, err := pg.conn.Query(context.Background(), 
 	`SELECT shop_id, name, type, coalesce(address, ''), 
 	coalesce(url,''), coalesce(ST_X(geog::geometry), 0) long, coalesce(ST_Y(geog::geometry), 0) lat, district, coalesce(notes, '') 
-	FROM shops WHERE (to_tsvector('cuisine', search_text) @@ plainto_tsquery('cuisine_syn', $1) OR name ILIKE '%'||$1||'%') 
+	FROM shops WHERE (to_tsvector('cuisine', search_text || ' ' || district) @@ plainto_tsquery('cuisine_syn', $1) OR name ILIKE '%'||$1||'%') 
 	and (address IS NOT NULL OR url IS NOT NULL) order by random()`,
 		keywords)
 	
