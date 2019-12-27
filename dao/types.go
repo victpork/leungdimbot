@@ -74,6 +74,8 @@ type Backend interface {
 	UpdateShopInfo(shops []Shop) error
 	NearestShops(lat, long float64, distance string) ([]Shop, error)
 	ShopMissingInfo() ([]Shop, error)
+	SuggestKeyword(key string) ([]string, error)
+	Districts() ([]string, error)
 	Close() error
 }
 

@@ -10,10 +10,12 @@ import (
 
 var (
 	cache *gcache.Cache
+	districts map[string]struct{}
 )
 
 func init() {
 	cache = gcache.New(10*time.Minute, 20*time.Minute)
+	districts = make(map[string]struct{})
 }
 
 func (s *ServeBot) shopWithGeohash(geohash, distance string) ([]dao.Shop, error) {
@@ -89,4 +91,21 @@ func (s *ServeBot) advSearch(query string) ([]dao.Shop, error) {
 	}
 
 	return shops, nil
+}
+
+func (s *ServeBot) isDistrict(d string) bool {
+	if len(districts) == 0 {
+		dList, err := s.da.Districts()
+		if err != nil {
+			return true
+		}
+		for i := range dList {
+			districts[dList[i]] = struct{}{}
+		}
+	}
+	_, ok := districts[d]
+	if ok {
+		return true
+	}
+	return false
 }

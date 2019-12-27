@@ -7,6 +7,7 @@ import (
 	ghash "github.com/mmcloughlin/geohash"
 	"strings"
 	"fmt"
+	"unicode/utf8"
 )
 
 const (
@@ -231,6 +232,58 @@ func (pg *PostgresBackend) AdvQuery(query string) ([]Shop, error) {
 		return nil, rows.Err()
 	}
 	return shoplist, nil
+}
+
+//SuggestKeyword will take provided keyword to look into the keyword db and search 
+//with edit distance <= len(key) - 1
+func (pg *PostgresBackend) SuggestKeyword(key string) ([]string, error) {
+	t := utf8.RuneCountInString(key)
+	var rows pgx.Rows 
+	var err error
+	if t == 1 {
+		rows, err = pg.conn.Query(context.Background(), 
+			`select word from ts_stat('select to_tsvector(''cuisine'', search_text) from shops')
+			where word like '%'||%1||'%'`, key)
+	} else {
+		rows, err = pg.conn.Query(context.Background(), 
+			`select word from ts_stat('select to_tsvector(''cuisine'', search_text) from shops')
+			where levenshtein_less_equal($1, word, $2) <=$2`, key, t-1)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	suggestList := make([]string, 0)
+	for rows.Next() {
+		k := ""
+		err := rows.Scan(&k)
+		if err != nil {
+			return nil, err
+		}
+		suggestList = append(suggestList, k)
+	}
+
+	return suggestList, nil
+}
+
+//Districts returns all districts
+func (pg *PostgresBackend) Districts() ([]string, error) {
+	rows, err := pg.conn.Query(context.Background(), "select distinct district from shops")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	districts := make([]string, 0)
+	for rows.Next() {
+		k := ""
+		err := rows.Scan(&k)
+		if err != nil {
+			return nil, err
+		}
+		districts = append(districts, k)
+	}
+
+	return districts, nil
 }
 
 func area(hash, distance string) []string {

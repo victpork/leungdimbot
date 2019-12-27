@@ -8,7 +8,7 @@ require (
 	github.com/antchfx/htmlquery v1.1.0 // indirect
 	github.com/antchfx/xmlquery v1.1.0 // indirect
 	github.com/antchfx/xpath v1.1.0 // indirect
-	github.com/blevesearch/bleve v0.8.1
+	github.com/blevesearch/bleve v0.8.2-0.20191030071327-189ee421f71e
 	github.com/blevesearch/blevex v0.0.0-20190916190636-152f0fe5c040 // indirect
 	github.com/blevesearch/go-porterstemmer v1.0.2 // indirect
 	github.com/blevesearch/segment v0.0.0-20160915185041-762005e7a34f // indirect
@@ -20,9 +20,11 @@ require (
 	github.com/facebookgo/ensure v0.0.0-20160127193407-b4ab57deab51 // indirect
 	github.com/facebookgo/stack v0.0.0-20160209184415-751773369052 // indirect
 	github.com/facebookgo/subset v0.0.0-20150612182917-8dac2c3c4870 // indirect
+	github.com/glycerine/go-unsnap-stream v0.0.0-20190901134440-81cf024a9e0a // indirect
 	github.com/go-telegram-bot-api/telegram-bot-api v4.6.4+incompatible
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gocolly/colly v1.2.0
+	github.com/golang/protobuf v1.3.2 // indirect
 	github.com/google/uuid v1.1.1 // indirect
 	github.com/jackc/pgx/v4 v4.1.2
 	github.com/jmhodges/levigo v1.0.0 // indirect
@@ -40,8 +42,9 @@ require (
 	github.com/tecbot/gorocksdb v0.0.0-20191019123150-400c56251341 // indirect
 	github.com/technoweenie/multipartstreamer v1.0.1 // indirect
 	github.com/temoto/robotstxt v1.1.1 // indirect
+	github.com/tinylib/msgp v1.1.1 // indirect
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
-	golang.org/x/sys v0.0.0-20191128015809-6d18c012aee9 // indirect
+	golang.org/x/sys v0.0.0-20191224085550-c709ea063b76 // indirect
 	googlemaps.github.io/maps v0.0.0-20190909213747-3c037358a0f0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 )

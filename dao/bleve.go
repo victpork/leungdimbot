@@ -54,8 +54,23 @@ func (b *BleveBackend) ShopByID(shopID int) (Shop, error) {
 //NearestShops retrieves nearest shops with provided current location and distance
 func (b *BleveBackend) NearestShops(lat, long float64, dist string) ([]Shop, error) {
 	q := bleve.NewGeoDistanceQuery(long, lat, dist)
+	q.SetField("Location")
+	sr := bleve.NewSearchRequest(q)
+	s, err := b.index.Search(sr)
+	if err != nil {
+		return nil, err
+	}
+	gSort, err := search.NewSortGeoDistance("Location", "m", long, lat, true)
+	if err != nil {
+		return nil, err
+	}
+	s.Request.SortByCustom(search.SortOrder{gSort})
 	
-	return b.queryIndex(q)
+	res := make([]Shop, s.Total)
+	for i := range s.Hits {
+		res[i] = convertSearchResultToShop(*s.Hits[i])
+	}
+	return res, nil
 }
 
 func newShopIndexMapping() mapping.IndexMapping {
@@ -70,13 +85,13 @@ func newShopIndexMapping() mapping.IndexMapping {
 	shopMapping.AddFieldMappingsAt("District", kwordMap)
 	shopMapping.AddFieldMappingsAt("Type", kwordMap)
 	
-	shopMapping.AddFieldMappingsAt("Geohash", bleve.NewGeoPointFieldMapping())
+	shopMapping.AddFieldMappingsAt("Location", bleve.NewGeoPointFieldMapping())
 	
 	noSearchMap := bleve.NewTextFieldMapping()
 	noSearchMap.Index = false
 	shopMapping.AddFieldMappingsAt("Address", noSearchMap)
 	shopMapping.AddFieldMappingsAt("URL", noSearchMap)
-
+	shopMapping.AddFieldMappingsAt("Tags", kwordMap)
 	mapping.AddDocumentMapping("Shop", shopMapping)
 	mapping.TypeField = "DocType"
 	return mapping
@@ -99,7 +114,7 @@ func convertSearchResultToShop(docMatch search.DocumentMatch) Shop {
 		Type: docMatch.Fields["Type"].(string),
 		District: docMatch.Fields["District"].(string),
 		Address: docMatch.Fields["Address"].(string),
-
+		//Position: docMatch.Locations["Location"],
 	}
 
 	return s
@@ -121,6 +136,7 @@ func (b *BleveBackend) ShopMissingInfo() ([]Shop, error) {
 
 func (b *BleveBackend) queryIndex(q query.Query) ([]Shop, error) {
 	req := bleve.NewSearchRequest(q)
+	req.IncludeLocations = true
 	res, err := b.index.Search(req)
 	if err != nil {
 		return nil, err
@@ -155,4 +171,42 @@ func (b *BleveBackend) AdvQuery(query string) ([]Shop, error) {
 // Close Bleve index
 func (b *BleveBackend) Close() error {
 	return b.index.Close()
+}
+
+//SuggestKeyword will take provided keyword to look into the keyword db and search 
+//with edit distance <= len(key) - 1
+func (b *BleveBackend) SuggestKeyword(key string) ([]string, error) {
+	q := bleve.NewFuzzyQuery(key)
+	q.SetFuzziness(len(key)-1)
+	sr := bleve.NewSearchRequest(q)
+	fr := bleve.NewFacetRequest("Tags", 4)
+	sr.AddFacet("shopType", fr)
+	res, err := b.index.Search(sr)
+	if err != nil {
+		return nil, err
+	}
+	terms := make([]string, len(res.Facets["shopType"].Terms))
+	for i := range res.Facets["shopType"].Terms {
+		terms[i] = res.Facets["shopType"].Terms[i].Term
+	}
+	return terms, nil
+}
+
+//Districts returns a list of districts
+func (b *BleveBackend) Districts() ([]string, error) {
+	dict, err := b.index.FieldDict("District")
+	if err != nil {
+		return nil, err
+	}
+	defer dict.Close()
+	
+	dc := make([]string, 0)
+	for {
+		ety, err := dict.Next()
+		if err != nil {
+			break
+		}
+		dc = append(dc, ety.Term)
+	}
+	return dc, nil
 }

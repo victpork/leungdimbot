@@ -371,7 +371,23 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 					}
 					switch len(shops) {
 					case 0:
-						err = r.SendMsg(update.Message.Chat.ID, "關鍵字找不到任何結果\n可嘗試直接提供座標 (📎>Location) 搜尋座標附近店舖")
+						//Run against districts
+						kwList := strings.Split(update.Message.Text, " ") 
+						hasSuggested := false
+						for i := range kwList {
+							if !r.isDistrict(kwList[i]) {
+								sList, err := r.da.SuggestKeyword(kwList[i])
+								if err != nil || len(sList) == 0 {
+									break
+								}
+								err = r.SendMsg(update.Message.Chat.ID, fmt.Sprintf("關鍵字找不到任何結果\n可嘗試以下關鍵字:\n%s", strings.Join(sList, " ")))
+								hasSuggested = true
+								break
+							}
+						} 
+						if !hasSuggested {
+							err = r.SendMsg(update.Message.Chat.ID, "關鍵字找不到任何結果\n可嘗試直接提供座標 (📎>Location) 搜尋座標附近店舖")
+						}
 					case 1:
 						err = r.SendSingleShop(update.Message.Chat.ID, shops[0])
 					default:
