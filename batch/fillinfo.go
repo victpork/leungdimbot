@@ -178,6 +178,12 @@ func batchController(ctx context.Context, errCh chan<- error) {
 		} else {
 			log.WithField("affectedRows", res).Printf("Updating rows with tags")
 		}
+		res, err = pg.RefreshKeywords()
+		if err != nil {
+			errCh <- err
+		} else {
+			log.WithField("affectedRows", res).Printf("Updating keyword table")
+		}
 	}
 
 	close(errCh)

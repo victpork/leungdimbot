@@ -83,4 +83,5 @@ type Backend interface {
 type TaggedBackend interface {
 	Backend
 	UpdateTags() (int, error)
+	RefreshKeywords() (int, error)
 }

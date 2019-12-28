@@ -44,7 +44,14 @@ func (pg *PostgresBackend) CreateTable() error {
 		search_text TEXT,
 		CONSTRAINT shops_pkey PRIMARY KEY (shop_id)
 	)`)
+	if err != nil {
+		return err
+	}
 
+	_, err = pg.conn.Exec(context.Background(), `CREATE TABLE public.keyword (
+		word TEXT NOT NULL,
+		CONSTRAINT keyword_pkey PRIMARY KEY (word)
+		)`)
 	return err
 }
 
@@ -157,6 +164,22 @@ func (pg *PostgresBackend) UpdateTags() (int, error) {
 	return int(ctag.RowsAffected()), nil
 }
 
+//RefreshKeywords flush existing keywords saved in table keyword and select new ones from shops.search_text
+func (pg *PostgresBackend) RefreshKeywords() (int, error) {
+	_, err := pg.conn.Exec(context.Background(), "TRUNCATE keyword")
+	if err != nil {
+		return -1, err
+	}
+	
+	t, err := pg.conn.Exec(context.Background(), `insert into keyword(
+		SELECT word from ts_stat('select to_tsvector(''cuisine'', search_text) from shops'))`)
+	if err != nil {
+		return -1, err
+	}
+
+	return int(t.RowsAffected()), nil
+}
+
 //ShopByID returns shop by internal ID
 func (pg *PostgresBackend) ShopByID(shopID int) (Shop, error) {
 	r := pg.conn.QueryRow(context.Background(),
@@ -242,11 +265,10 @@ func (pg *PostgresBackend) SuggestKeyword(key string) ([]string, error) {
 	var err error
 	if t == 1 {
 		rows, err = pg.conn.Query(context.Background(), 
-			`select word from ts_stat('select to_tsvector(''cuisine'', search_text) from shops')
-			where word like '%'||%1||'%'`, key)
+			`select word from keyword where word like '%'||%1||'%'`, key)
 	} else {
 		rows, err = pg.conn.Query(context.Background(), 
-			`select word from ts_stat('select to_tsvector(''cuisine'', search_text) from shops')
+			`select word from keyword
 			where levenshtein_less_equal($1, word, $2) <=$2`, key, t-1)
 	}
 	if err != nil {

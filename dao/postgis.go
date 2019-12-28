@@ -31,7 +31,14 @@ func (pg *PostGISBackend) CreateTable() error {
 		search_text TEXT,
 		CONSTRAINT shops_pkey PRIMARY KEY (shop_id)
 	)`)
+	if err != nil {
+		return err
+	}
 
+	_, err = pg.conn.Exec(context.Background(), `CREATE TABLE public.keyword (
+		word TEXT NOT NULL,
+		CONSTRAINT keyword_pkey PRIMARY KEY (word)
+		)`)
 	return err
 }
 
