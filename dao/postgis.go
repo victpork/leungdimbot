@@ -50,9 +50,10 @@ func NewPostGISBackend(connStr string) (*PostGISBackend, error) {
 
 //ShopMissingInfo get data with missing info
 func (pg *PostGISBackend) ShopMissingInfo() ([]Shop, error) {
+	exTypes := []string{nonPhyStore, closedStore}
 	rows, err := pg.conn.Query(context.Background(),
 		`SELECT shop_id, name, district, coalesce(address, ''), 
-		 type FROM shops WHERE geog IS NULL and district <> $1`, nonPhyStore)
+		 type FROM shops WHERE geog IS NULL and district <> all($1)`, exTypes)
 	if err != nil {
 		return nil, err
 	}
@@ -99,10 +100,10 @@ func (pg *PostGISBackend) NearestShops(lat, long float64, distance string) ([]Sh
 	rows, err := pg.conn.Query(context.Background(),
 		`SELECT shop_id, name, type, coalesce(address, ''), 
 		coalesce(url, ''), district, ST_X(geog::geometry) long, ST_Y(geog::geometry) lat,
-		round(ST_Distance(geog, ST_MakePoint($1, $2)::geography, false)) as dist
+		round(ST_Distance(geog, ST_MakePoint($1, $2)::geography, false)) as dist, coalesce(notes, '')
 		FROM shops
-		WHERE ST_DWithin(geog, ST_MakePoint($1, $2), $3, false) order by dist`,
-		long, lat, d)
+		WHERE ST_DWithin(geog, ST_MakePoint($1, $2), $3, false) and district <> $4 order by dist`,
+		long, lat, d, closedStore)
 
 	if err != nil {
 		return nil, err
@@ -113,7 +114,7 @@ func (pg *PostGISBackend) NearestShops(lat, long float64, distance string) ([]Sh
 	for rows.Next() {
 		shop := Shop{}
 		rows.Scan(&shop.ID, &shop.Name, &shop.Type, &shop.Address, 
-			&shop.URL, &shop.District, &shop.Position.Long, &shop.Position.Lat, &shop.Distance)
+			&shop.URL, &shop.District, &shop.Position.Long, &shop.Position.Lat, &shop.Distance, &shop.Notes)
 		
 		shoplist = append(shoplist, shop)
 	}

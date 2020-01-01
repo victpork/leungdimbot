@@ -8,6 +8,7 @@ import (
 const (
 	//Type for non-physical (network) store
 	nonPhyStore = "網店"
+	closedStore = "已結業"
 )
 //Shop is a struct for storing shop info
 type Shop struct {

@@ -57,9 +57,10 @@ func (pg *PostgresBackend) CreateTable() error {
 
 //ShopMissingInfo get data with missing info
 func (pg *PostgresBackend) ShopMissingInfo() ([]Shop, error) {
+	exTypes := []string{nonPhyStore, closedStore}
 	rows, err := pg.conn.Query(context.Background(),
 		`SELECT shop_id, name, district, coalesce(address, ''), coalesce(geohash, ''),
-		 type FROM shops WHERE geohash IS NULL and district <> $1`, nonPhyStore)
+		 type FROM shops WHERE geohash IS NULL and district <> all($1)`, exTypes)
 	if err != nil {
 		return nil, err
 	}
@@ -99,8 +100,8 @@ func (pg *PostgresBackend) UpdateShopInfo(shops []Shop) error {
 func (pg *PostgresBackend) NearestShops(lat, long float64, distance string) ([]Shop, error) {
 	gHashArr := area(ghash.EncodeWithPrecision(lat, long, 7), distance)
 	rows, err := pg.conn.Query(context.Background(),
-		"SELECT shop_id, name, type, coalesce(address, ''), coalesce(url,''), geohash, district FROM shops WHERE LEFT(geohash, 7) = ANY($1) order by random()",
-		gHashArr)
+		"SELECT shop_id, name, type, coalesce(address, ''), coalesce(url,''), geohash, district FROM shops WHERE LEFT(geohash, 7) = ANY($1) and district <> $2 order by random()",
+		gHashArr, closedStore)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +237,7 @@ func (pg *PostgresBackend) AdvQuery(query string) ([]Shop, error) {
 	rows, err := pg.conn.Query(context.Background(),
 		`SELECT shop_id, name, type, coalesce(address, ''), 
 		coalesce(url,''), coalesce(geohash, ''), district, coalesce(notes, '') from shops 
-	    where to_tsvector('cuisine', search_text) @@ websearch_to_tsquery('cuisine_syn', $1)`, query)
+	    where to_tsvector('cuisine', search_text || ' ' || district) @@ websearch_to_tsquery('cuisine_syn', $1) order by random()`, query)
 
 	if err != nil {
 		return nil, err

@@ -498,7 +498,7 @@ func shopListMessage(shops []dao.Shop, key string, limit, offset int) (string, t
 func (r ServeBot) SendSingleShop(chatID int64, shop dao.Shop) error {
 	if shop.HasPhyLoc() {
 		lat, long := shop.ToCoord()
-		venue := tgbotapi.NewVenue(chatID, fmt.Sprintf("%s (%s)", shop.Name, shop.Type), shop.Address, lat, long)
+		venue := tgbotapi.NewVenue(chatID, fmt.Sprintf("%s-%s (%s)", shop.Name, shop.District, shop.Type), shop.Address, lat, long)
 
 		var t tgbotapi.InlineKeyboardButton
 		if shop.URL != "" {

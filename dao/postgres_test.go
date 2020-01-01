@@ -33,3 +33,22 @@ func TestSuggestKeywords(t *testing.T) {
 		t.Fatalf("Expected: 咖啡, actual: %s", s[0])
 	}
 }
+
+func TestShopMissingInfo(t *testing.T) {
+	db, err := NewPostGISBackend(fmt.Sprint(connStr))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	s, err := db.ShopMissingInfo()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := range s {
+		if s[i].Type == "網店" || s[i].Type == "已結業" {
+			t.Error("shop with unwanted type selected")
+		} 
+	}
+}
