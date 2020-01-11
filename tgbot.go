@@ -523,13 +523,11 @@ func (r ServeBot) SendSingleShop(chatID int64, shop dao.Shop) error {
 		lat, long := shop.ToCoord()
 		venue := tgbotapi.NewVenue(chatID, fmt.Sprintf("%s-%s (%s)", shop.Name, shop.District, shop.Type), shop.Address, lat, long)
 
-		var t tgbotapi.InlineKeyboardButton
+		var row []tgbotapi.InlineKeyboardButton
+		row = append(row, tgbotapi.NewInlineKeyboardButtonURL("🔍Google 店名", "https://google.com/search?q="+url.QueryEscape(shop.Name)))
 		if shop.URL != "" {
-			t = tgbotapi.NewInlineKeyboardButtonURL("🏠店舖網站", shop.URL)
-		} else {
-			t = tgbotapi.NewInlineKeyboardButtonURL("🔍Google 店名", "https://google.com/search?q="+url.PathEscape(shop.Name))
+			row = append(row, tgbotapi.NewInlineKeyboardButtonURL("🏠店舖網站", shop.URL))
 		}
-		row := tgbotapi.NewInlineKeyboardRow(t)
 		venue.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(row)
 		_, err := r.bot.Send(venue)
 		if err != nil {
