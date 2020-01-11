@@ -3,19 +3,26 @@ package main
 import (
 	"equa.link/wongdim"
 	"equa.link/wongdim/dao"
-	"github.com/spf13/viper"
-	log "github.com/sirupsen/logrus"
-	"github.com/orandin/lumberjackrus"
 	"fmt"
+	"github.com/orandin/lumberjackrus"
+	log "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 	"io/ioutil"
+)
+
+const (
+	tgWebhook  = "H"
+	tgLongPoll = "P"
 )
 
 func init() {
 	viper.SetDefault("tg.debug", false)
+	viper.SetDefault("tg.connectType", tgLongPoll)
+	viper.SetDefault("tg.serveURL", "localhost")
 	viper.SetDefault("backendType", dao.PostgreSQL)
 
 	viper.SetDefault("db.host", "0.0.0.0")
-	viper.SetDefault("db.port", "6543")
+	viper.SetDefault("db.port", 6543)
 	viper.SetDefault("db.user", "wongdim")
 	viper.SetDefault("db.password", "wongdimpassword")
 	viper.SetDefault("db.db", "wongdim")
@@ -53,21 +60,21 @@ func main() {
 	viper.SetEnvPrefix("WDIM")
 
 	err := viper.ReadInConfig() // Find and read the config file
-	if err != nil { // Handle errors reading the config file
+	if err != nil {             // Handle errors reading the config file
 		log.WithError(err).Error("Config file not found")
 	}
 
 	var beOptCfg wongdim.Option
 	beType := viper.Get("backendType")
-	switch beType{
+	switch beType {
 	case dao.PostgreSQL:
 		//Connect to DB
-		dbConnStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", 
-		viper.Get("db.host"),
-		viper.Get("db.port"),
-		viper.Get("db.user"),
-		viper.Get("db.password"),
-		viper.Get("db.db"))
+		dbConnStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+			viper.Get("db.host"),
+			viper.Get("db.port"),
+			viper.Get("db.user"),
+			viper.Get("db.password"),
+			viper.Get("db.db"))
 		db, err := dao.NewPostgresBackend(dbConnStr)
 		if err != nil {
 			log.WithError(err).Fatal("Could not connect to database")
@@ -76,12 +83,12 @@ func main() {
 		log.Info("Database connected")
 		beOptCfg = wongdim.WithBackend(db)
 	case dao.PostGIS:
-		dbConnStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", 
-		viper.Get("db.host"),
-		viper.Get("db.port"),
-		viper.Get("db.user"),
-		viper.Get("db.password"),
-		viper.Get("db.db"))
+		dbConnStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+			viper.Get("db.host"),
+			viper.Get("db.port"),
+			viper.Get("db.user"),
+			viper.Get("db.password"),
+			viper.Get("db.db"))
 		db, err := dao.NewPostGISBackend(dbConnStr)
 		if err != nil {
 			log.WithError(err).Fatal("Could not connect to database")
@@ -101,7 +108,7 @@ func main() {
 	if err != nil {
 		log.WithError(err).Fatal("Cannot read help file")
 	}
-	
+
 	bot, err := wongdim.New(
 		beOptCfg,
 		wongdim.WithTelegramAPIKey(viper.GetString("tg.key"), viper.GetBool("tg.debug")),
@@ -112,5 +119,10 @@ func main() {
 	if err != nil {
 		log.WithError(err).Fatal("Could not create TG bot")
 	}
-	bot.Listen()
+	switch viper.GetString("tg.connectType") {
+	case tgWebhook:
+		bot.Listen()
+	case tgLongPoll:
+		bot.Connect()
+	}
 }

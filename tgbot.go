@@ -111,6 +111,48 @@ func WithCert(certFile, keyFile string) Option {
 	}
 }
 
+//Connect starts to listen for Telegram events with long polling
+func (r *ServeBot) Connect() error {
+	u := tgbotapi.NewUpdate(0)
+	u.Timeout = 60
+	updates, err := r.bot.GetUpdatesChan(u)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for i := 0; i < 5; i++ {
+		go r.process(updates)
+	}
+
+	r.listenForBatchReq()
+
+	return nil
+}
+
+func (r *ServeBot) listenForBatchReq() {
+	//Create a URL for triggering fillInfo batch
+	http.HandleFunc("/fillInfo", func(writer http.ResponseWriter, req *http.Request) {
+		ctx := context.Background()
+
+		errCh := batch.Run(ctx, r.da, r.mapClient.FillGeocode)
+
+		go func() {
+			for e := range errCh {
+				log.WithError(e).Error("Batch error")
+			}
+		}()
+
+		cache.Flush()
+		writer.WriteHeader(http.StatusOK)
+		writer.Write([]byte("OK"))
+	})
+
+	if len(r.certFile) > 0 {
+		http.ListenAndServeTLS("0.0.0.0:443", r.certFile, r.keyFile, nil)
+	} else {
+		http.ListenAndServe("0.0.0.0:80", nil)
+	}
+}
+
 //Listen start the bot to listen to request
 func (r *ServeBot) Listen() error {
 	log.WithField("url", r.url+"/"+r.bot.Token).Info("Service started and listening")
@@ -129,27 +171,8 @@ func (r *ServeBot) Listen() error {
 	for i := 0; i < 5; i++ {
 		go r.process(updates)
 	}
-	//Create a URL for triggering fillInfo batch
-	http.HandleFunc("/fillInfo", func(writer http.ResponseWriter, req *http.Request) {
-		ctx := context.Background()
 
-		errCh := batch.Run(ctx, r.da, r.mapClient.FillGeocode)
-
-		go func() {
-			for e := range errCh {
-				log.WithError(e).Error("Batch error")
-			}
-		}()
-
-		cache.Flush()
-		writer.WriteHeader(http.StatusOK)
-		writer.Write([]byte("OK"))
-	})
-	if len(r.certFile) > 0 {
-		http.ListenAndServeTLS("0.0.0.0:443", r.certFile, r.keyFile, nil)
-	} else {
-		http.ListenAndServe("0.0.0.0:80", nil)
-	}
+	r.listenForBatchReq()
 
 	return nil
 }
@@ -286,7 +309,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 					} else {
 						result, err := r.da.ShopByID(itemID)
 						log.WithFields(log.Fields{
-							"shopID": itemID,
+							"shopID":   itemID,
 							"shopName": result.Name,
 						}).Info("Single shop selected")
 						if err != nil {
@@ -343,7 +366,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 							log.WithError(err).Error("Database error")
 						}
 						log.WithFields(log.Fields{
-							"query": queryStr,
+							"query":     queryStr,
 							"resultCnt": len(shops),
 						}).Info("Advance search")
 					} else {
@@ -365,14 +388,14 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 							log.WithError(err).Error("Database error")
 						}
 						log.WithFields(log.Fields{
-							"query": update.Message.Text,
+							"query":     update.Message.Text,
 							"resultCnt": len(shops),
 						}).Printf("Simple search")
 					}
 					switch len(shops) {
 					case 0:
 						//Run against districts
-						kwList := strings.Split(update.Message.Text, " ") 
+						kwList := strings.Split(update.Message.Text, " ")
 						hasSuggested := false
 						for i := range kwList {
 							if !r.isDistrict(kwList[i]) {
@@ -384,7 +407,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 								hasSuggested = true
 								break
 							}
-						} 
+						}
 						if !hasSuggested {
 							err = r.SendMsg(update.Message.Chat.ID, "關鍵字找不到任何結果\n可嘗試直接提供座標 (📎>Location) 搜尋座標附近店舖")
 						}
