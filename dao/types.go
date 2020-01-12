@@ -10,24 +10,25 @@ const (
 	nonPhyStore = "網店"
 	closedStore = "已結業"
 )
+
 //Shop is a struct for storing shop info
 type Shop struct {
-	ID       int    //Internal ID
-	Name     string //Shop name 
-	Address  string //Shop address
-	Geohash  string //Geohash code for lat/long coordinates
-	Position Coord //Position is the numeric representation of the shop coordinates
-	Type 	 string //Shop type
-	District string  //Where is the shop?
-	URL      string  //URL, currently unused
+	ID       int      //Internal ID
+	Name     string   //Shop name
+	Address  string   //Shop address
+	Geohash  string   //Geohash code for lat/long coordinates
+	Position Coord    //Position is the numeric representation of the shop coordinates
+	Type     string   //Shop type
+	District string   //Where is the shop?
+	URL      string   //URL, currently unused
 	Tags     []string //Tags used
-	Notes    string  //Notes for the shop
-	Distance int //Distance in metres
+	Notes    string   //Notes for the shop
+	Distance int      //Distance in metres
 }
 
 //Coord represents a point on Earth
 type Coord struct {
-	Lat float64
+	Lat  float64
 	Long float64
 }
 
@@ -77,10 +78,11 @@ type Backend interface {
 	ShopMissingInfo() ([]Shop, error)
 	SuggestKeyword(key string) ([]string, error)
 	Districts() ([]string, error)
+	ShopsWithKeywordSortByDist(keywords string, lat, long float64) ([]Shop, error)
 	Close() error
 }
 
-//TaggedBackend are datasources with separate function to update tags after input 
+//TaggedBackend are datasources with separate function to update tags after input
 type TaggedBackend interface {
 	Backend
 	UpdateTags() (int, error)

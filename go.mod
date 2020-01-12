@@ -39,3 +39,5 @@ require (
 	googlemaps.github.io/maps v0.0.0-20190909213747-3c037358a0f0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 )
+
+replace github.com/go-telegram-bot-api/telegram-bot-api => github.com/mkishere/telegram-bot-api v4.6.5-0.20200106162813-1f98cd2e4700+incompatible

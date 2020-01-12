@@ -1,15 +1,16 @@
 package wongdim
 
 import (
-	log "github.com/sirupsen/logrus"
 	"equa.link/wongdim/dao"
-	gcache "github.com/patrickmn/go-cache"
+	"fmt"
 	ghash "github.com/mmcloughlin/geohash"
+	gcache "github.com/patrickmn/go-cache"
+	log "github.com/sirupsen/logrus"
 	"time"
 )
 
 var (
-	cache *gcache.Cache
+	cache     *gcache.Cache
 	districts map[string]struct{}
 )
 
@@ -32,7 +33,7 @@ func (s *ServeBot) shopWithGeohash(geohash, distance string) ([]dao.Shop, error)
 			log.WithError(err).Error("Database error")
 			return nil, err
 		}
-		cache.SetDefault("<G>" + geohash, shops)
+		cache.SetDefault("<G>"+geohash, shops)
 	}
 
 	return shops, nil
@@ -51,7 +52,7 @@ func (s *ServeBot) shopWithCoord(lat, long float64, distance string) ([]dao.Shop
 			log.WithError(err).Error("Database error")
 			return nil, err
 		}
-		cache.SetDefault("<G>" + geohash, shops)
+		cache.SetDefault("<G>"+geohash, shops)
 	}
 
 	return shops, nil
@@ -69,7 +70,25 @@ func (s *ServeBot) shopWithTags(keywords string) ([]dao.Shop, error) {
 			log.WithError(err).Error("Database error")
 			return nil, err
 		}
-		cache.SetDefault("<S>" + keywords, shops)
+		cache.SetDefault("<S>"+keywords, shops)
+	}
+
+	return shops, nil
+}
+
+func (s *ServeBot) shopsWithKeywordSortByDist(keyword string, lat, long float64) ([]dao.Shop, error) {
+	v, ok := cache.Get(fmt.Sprintf("<KG>%s (%f %f)", keyword, lat, long))
+	var shops []dao.Shop
+	var err error
+	if ok {
+		shops = v.([]dao.Shop)
+	} else {
+		shops, err = s.da.ShopsWithKeywordSortByDist(keyword, lat, long)
+		if err != nil {
+			log.WithError(err).Error("Database error")
+			return nil, err
+		}
+		cache.SetDefault(fmt.Sprintf("<KG>%s (%f %f)", keyword, lat, long), shops)
 	}
 
 	return shops, nil
@@ -87,7 +106,7 @@ func (s *ServeBot) advSearch(query string) ([]dao.Shop, error) {
 			log.WithError(err).Error("Database error")
 			return nil, err
 		}
-		cache.SetDefault("<A>" + query, shops)
+		cache.SetDefault("<A>"+query, shops)
 	}
 
 	return shops, nil

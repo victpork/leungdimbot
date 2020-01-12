@@ -2,11 +2,11 @@ package dao
 
 import (
 	"context"
-	pgx "github.com/jackc/pgx/v4"
-	log "github.com/sirupsen/logrus"
-	ghash "github.com/mmcloughlin/geohash"
-	"strings"
 	"fmt"
+	pgx "github.com/jackc/pgx/v4"
+	ghash "github.com/mmcloughlin/geohash"
+	log "github.com/sirupsen/logrus"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -117,13 +117,13 @@ func (pg *PostgresBackend) NearestShops(lat, long float64, distance string) ([]S
 
 //ShopsWithKeyword returns shops with tags provided
 func (pg *PostgresBackend) ShopsWithKeyword(keywords string) ([]Shop, error) {
-	rows, err := pg.conn.Query(context.Background(), 
-	`SELECT shop_id, name, type, coalesce(address, ''), 
+	rows, err := pg.conn.Query(context.Background(),
+		`SELECT shop_id, name, type, coalesce(address, ''), 
 	coalesce(url,''), coalesce(geohash, ''), district, coalesce(notes, '') 
 	FROM shops WHERE (to_tsvector('cuisine', search_text || ' ' || district) @@ plainto_tsquery('cuisine_syn', $1) OR name ILIKE '%'||$1||'%') 
 	and (address IS NOT NULL OR url IS NOT NULL) order by random()`,
 		keywords)
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -131,12 +131,12 @@ func (pg *PostgresBackend) ShopsWithKeyword(keywords string) ([]Shop, error) {
 	shoplist := make([]Shop, 0)
 	for rows.Next() {
 		shop := Shop{}
-		rows.Scan(&shop.ID, 
-			&shop.Name, 
-			&shop.Type, 
-			&shop.Address, 
-			&shop.URL, 
-			&shop.Geohash, 
+		rows.Scan(&shop.ID,
+			&shop.Name,
+			&shop.Type,
+			&shop.Address,
+			&shop.URL,
+			&shop.Geohash,
 			&shop.District,
 			&shop.Notes,
 		)
@@ -171,7 +171,7 @@ func (pg *PostgresBackend) RefreshKeywords() (int, error) {
 	if err != nil {
 		return -1, err
 	}
-	
+
 	t, err := pg.conn.Exec(context.Background(), `insert into keyword(
 		SELECT word from ts_stat('select to_tsvector(''cuisine'', search_text) from shops'))`)
 	if err != nil {
@@ -226,7 +226,7 @@ func (pg *PostgresBackend) AdvQuery(query string) ([]Shop, error) {
 	//Filter out to avoid returning every entry
 	words := strings.Split(query, " ")
 	onlyHasNeg := true
-	for i:= range words {
+	for i := range words {
 		if !strings.HasPrefix(words[i], "-") && strings.ToLower(words[i]) != "or" {
 			onlyHasNeg = false
 		}
@@ -258,17 +258,17 @@ func (pg *PostgresBackend) AdvQuery(query string) ([]Shop, error) {
 	return shoplist, nil
 }
 
-//SuggestKeyword will take provided keyword to look into the keyword db and search 
+//SuggestKeyword will take provided keyword to look into the keyword db and search
 //with edit distance <= len(key) - 1
 func (pg *PostgresBackend) SuggestKeyword(key string) ([]string, error) {
 	t := utf8.RuneCountInString(key)
-	var rows pgx.Rows 
+	var rows pgx.Rows
 	var err error
 	if t == 1 {
-		rows, err = pg.conn.Query(context.Background(), 
+		rows, err = pg.conn.Query(context.Background(),
 			`select word from keyword where word like '%'||%1||'%'`, key)
 	} else {
-		rows, err = pg.conn.Query(context.Background(), 
+		rows, err = pg.conn.Query(context.Background(),
 			`select word from keyword
 			where levenshtein_less_equal($1, word, $2) <=$2`, key, t-1)
 	}
@@ -307,6 +307,37 @@ func (pg *PostgresBackend) Districts() ([]string, error) {
 	}
 
 	return districts, nil
+}
+
+//ShopsWithKeywordSortByDist sort position by distance
+func (pg *PostgresBackend) ShopsWithKeywordSortByDist(keywords string, lat, long float64) ([]Shop, error) {
+	gHash := ghash.EncodeWithPrecision(lat, long, 7)
+	rows, err := pg.conn.Query(context.Background(),
+		`SELECT shop_id, name, type, coalesce(address, ''), 
+	coalesce(url,''), coalesce(geohash, ''), district, coalesce(notes, '') 
+	FROM shops WHERE (to_tsvector('cuisine', search_text || ' ' || district) @@ plainto_tsquery('cuisine_syn', $1) OR name ILIKE '%'||$1||'%') 
+	and (address IS NOT NULL OR url IS NOT NULL) order by levenshtein_less_equal($2, geohash, 4)`,
+		keywords, gHash)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	shoplist := make([]Shop, 0)
+	for rows.Next() {
+		shop := Shop{}
+		rows.Scan(&shop.ID,
+			&shop.Name,
+			&shop.Type,
+			&shop.Address,
+			&shop.URL,
+			&shop.Geohash,
+			&shop.District,
+			&shop.Notes,
+		)
+		shoplist = append(shoplist, shop)
+	}
+	return shoplist, nil
 }
 
 func area(hash, distance string) []string {

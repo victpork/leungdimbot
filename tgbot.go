@@ -206,7 +206,16 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 					}).Warn("SQL injection detected")
 				continue
 			}
-			shops, err := r.shopWithTags(strings.TrimSpace(update.InlineQuery.Query))
+			var shops []dao.Shop
+			var err error
+			if update.InlineQuery.Location != nil {
+				shops, err = r.shopsWithKeywordSortByDist(strings.TrimSpace(update.InlineQuery.Query),
+					update.InlineQuery.Location.Latitude,
+					update.InlineQuery.Location.Longitude,
+				)
+			} else {
+				shops, err = r.shopWithTags(strings.TrimSpace(update.InlineQuery.Query))
+			}
 			log.WithFields(
 				log.Fields{
 					"query":     strings.TrimSpace(update.InlineQuery.Query),
@@ -225,8 +234,9 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 			for i := range shops {
 				if shops[i].HasPhyLoc() {
 					lat, long := shops[i].ToCoord()
-					r := tgbotapi.NewInlineQueryResultLocation(
-						update.InlineQuery.Query+strconv.Itoa(shops[i].ID), shops[i].String(), lat, long)
+					r := tgbotapi.NewInlineQueryResultVenue(
+						update.InlineQuery.Query+strconv.Itoa(shops[i].ID), fmt.Sprintf("%s (%s)", shops[i].Name, shops[i].Type),
+						shops[i].Address, lat, long)
 					r.InputMessageContent = tgbotapi.InputVenueMessageContent{
 						Latitude:  lat,
 						Longitude: long,

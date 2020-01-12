@@ -1,10 +1,10 @@
 package dao
 
 import (
-	log "github.com/sirupsen/logrus"
 	"context"
-	"strings"
+	log "github.com/sirupsen/logrus"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -96,7 +96,7 @@ func (pg *PostGISBackend) NearestShops(lat, long float64, distance string) ([]Sh
 	if err != nil {
 		return nil, err
 	}
-	
+
 	rows, err := pg.conn.Query(context.Background(),
 		`SELECT shop_id, name, type, coalesce(address, ''), 
 		coalesce(url, ''), district, ST_X(geog::geometry) long, ST_Y(geog::geometry) lat,
@@ -113,9 +113,9 @@ func (pg *PostGISBackend) NearestShops(lat, long float64, distance string) ([]Sh
 	shoplist := make([]Shop, 0)
 	for rows.Next() {
 		shop := Shop{}
-		rows.Scan(&shop.ID, &shop.Name, &shop.Type, &shop.Address, 
+		rows.Scan(&shop.ID, &shop.Name, &shop.Type, &shop.Address,
 			&shop.URL, &shop.District, &shop.Position.Long, &shop.Position.Lat, &shop.Distance, &shop.Notes)
-		
+
 		shoplist = append(shoplist, shop)
 	}
 
@@ -128,7 +128,7 @@ func (pg *PostGISBackend) ShopByID(shopID int) (Shop, error) {
 		`SELECT name, type, coalesce(address, ''), coalesce(url,''), coalesce(ST_X(geog::geometry), 0) long, 
 		coalesce(ST_Y(geog::geometry), 0) lat, district, coalesce(notes, '') FROM shops WHERE shop_id = $1`, shopID)
 	shop := Shop{}
-	err := r.Scan(&shop.Name, &shop.Type, &shop.Address, &shop.URL, &shop.Position.Long, 
+	err := r.Scan(&shop.Name, &shop.Type, &shop.Address, &shop.URL, &shop.Position.Long,
 		&shop.Position.Lat, &shop.District, &shop.Notes)
 	if err != nil {
 		return shop, err
@@ -138,13 +138,13 @@ func (pg *PostGISBackend) ShopByID(shopID int) (Shop, error) {
 
 //ShopsWithKeyword returns shops with tags provided
 func (pg *PostGISBackend) ShopsWithKeyword(keywords string) ([]Shop, error) {
-	rows, err := pg.conn.Query(context.Background(), 
-	`SELECT shop_id, name, type, coalesce(address, ''), 
+	rows, err := pg.conn.Query(context.Background(),
+		`SELECT shop_id, name, type, coalesce(address, ''), 
 	coalesce(url,''), coalesce(ST_X(geog::geometry), 0) long, coalesce(ST_Y(geog::geometry), 0) lat, district, coalesce(notes, '') 
 	FROM shops WHERE (to_tsvector('cuisine', search_text || ' ' || district) @@ plainto_tsquery('cuisine_syn', $1) OR name ILIKE '%'||$1||'%') 
 	and (address IS NOT NULL OR url IS NOT NULL) order by random()`,
 		keywords)
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -152,11 +152,11 @@ func (pg *PostGISBackend) ShopsWithKeyword(keywords string) ([]Shop, error) {
 	shoplist := make([]Shop, 0)
 	for rows.Next() {
 		shop := Shop{}
-		rows.Scan(&shop.ID, 
-			&shop.Name, 
-			&shop.Type, 
-			&shop.Address, 
-			&shop.URL, 
+		rows.Scan(&shop.ID,
+			&shop.Name,
+			&shop.Type,
+			&shop.Address,
+			&shop.URL,
 			&shop.Position.Long,
 			&shop.Position.Lat,
 			&shop.District,
@@ -167,6 +167,39 @@ func (pg *PostGISBackend) ShopsWithKeyword(keywords string) ([]Shop, error) {
 	return shoplist, nil
 }
 
+//ShopsWithKeywordSortByDist sort position by distance
+func (pg *PostGISBackend) ShopsWithKeywordSortByDist(keywords string, lat, long float64) ([]Shop, error) {
+	rows, err := pg.conn.Query(context.Background(),
+		`SELECT shop_id, name, type, coalesce(address, ''), 
+	coalesce(url,''), coalesce(ST_X(geog::geometry), 0) long, coalesce(ST_Y(geog::geometry), 0) lat, 
+	district, coalesce(notes, '') 
+	FROM shops WHERE (to_tsvector('cuisine', search_text || ' ' || district) @@ plainto_tsquery('cuisine_syn', $1) 
+	OR name ILIKE '%'||$1||'%') 
+	and (address IS NOT NULL OR url IS NOT NULL)
+	order by ST_MakePoint($2, $3) <-> geog LIMIT 30`,
+		keywords, long, lat)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	shoplist := make([]Shop, 0)
+	for rows.Next() {
+		shop := Shop{}
+		rows.Scan(&shop.ID,
+			&shop.Name,
+			&shop.Type,
+			&shop.Address,
+			&shop.URL,
+			&shop.Position.Long,
+			&shop.Position.Lat,
+			&shop.District,
+			&shop.Notes,
+		)
+		shoplist = append(shoplist, shop)
+	}
+	return shoplist, nil
+}
 
 func disToInt(distance string) (int, error) {
 	var multiplier int
