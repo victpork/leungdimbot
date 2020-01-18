@@ -79,7 +79,7 @@ type Backend interface {
 	SuggestKeyword(key string) ([]string, error)
 	Districts() ([]string, error)
 	ShopsWithKeywordSortByDist(keywords string, lat, long float64) ([]Shop, error)
-	Close() error
+	Close()
 }
 
 //TaggedBackend are datasources with separate function to update tags after input

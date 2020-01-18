@@ -3,7 +3,8 @@ package dao
 import (
 	"context"
 	"fmt"
-	pgx "github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 	ghash "github.com/mmcloughlin/geohash"
 	log "github.com/sirupsen/logrus"
 	"strings"
@@ -18,12 +19,12 @@ const (
 //PostgresBackend is the data backend supported by PostgresSQL database
 type PostgresBackend struct {
 	//Conn is the database connection
-	conn *pgx.Conn
+	conn *pgxpool.Pool
 }
 
 //NewPostgresBackend creates and return a backend backed by PostgresSQL
 func NewPostgresBackend(connStr string) (*PostgresBackend, error) {
-	db, err := pgx.Connect(context.Background(), connStr)
+	db, err := pgxpool.Connect(context.Background(), connStr)
 	if err != nil {
 		return nil, err
 	}
@@ -194,8 +195,8 @@ func (pg *PostgresBackend) ShopByID(shopID int) (Shop, error) {
 }
 
 //Close close DB connection
-func (pg *PostgresBackend) Close() error {
-	return pg.conn.Close(context.Background())
+func (pg *PostgresBackend) Close() {
+	pg.conn.Close()
 }
 
 // AllShops returns all records from the database
