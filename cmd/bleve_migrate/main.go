@@ -2,9 +2,9 @@ package main
 
 import (
 	"equa.link/wongdim/dao"
-	"github.com/spf13/viper"
-	log "github.com/sirupsen/logrus"
 	"fmt"
+	log "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 func init() {
@@ -27,11 +27,11 @@ func main() {
 	viper.SetEnvPrefix("WDIM")
 
 	err := viper.ReadInConfig() // Find and read the config file
-	if err != nil { // Handle errors reading the config file
+	if err != nil {             // Handle errors reading the config file
 		log.WithError(err).Error("Config file not found")
 	}
 
-	dbConnStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", 
+	dbConnStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		viper.Get("db.host"),
 		viper.Get("db.port"),
 		viper.Get("db.user"),

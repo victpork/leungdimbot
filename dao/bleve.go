@@ -24,7 +24,7 @@ type BleveBackend struct {
 func NewBleveBackend(path string) (*BleveBackend, error) {
 	idx, err := bleve.Open(path)
 	if err == bleve.ErrorIndexPathDoesNotExist {
-		idx, err = bleve.New(path, newShopIndexMapping())
+		idx, err = bleve.NewUsing(path, newShopIndexMapping(), "scorch", "scorch", nil)
 		if err != nil {
 			return nil, fmt.Errorf("Cannot create store file %w", err)
 		}
@@ -168,8 +168,8 @@ func (b *BleveBackend) AdvQuery(query string) ([]Shop, error) {
 }
 
 // Close Bleve index
-func (b *BleveBackend) Close() error {
-	return b.index.Close()
+func (b *BleveBackend) Close() {
+	b.index.Close()
 }
 
 //ShopsWithKeywordSortByDist sort position by distance
