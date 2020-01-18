@@ -9,6 +9,13 @@ import (
 	"time"
 )
 
+const (
+	geoLocPrefix  = "<G>"
+	keywordPrefix = "<S>"
+	advPrefix     = "<A>"
+	kwGeoPrefix   = "<KG>"
+)
+
 var (
 	cache     *gcache.Cache
 	districts map[string]struct{}
@@ -23,7 +30,7 @@ func (s *ServeBot) shopWithGeohash(geohash, distance string) ([]dao.Shop, error)
 	var shops []dao.Shop
 	var err error
 
-	v, ok := cache.Get("<G>" + geohash)
+	v, ok := cache.Get(geoLocPrefix + geohash)
 	if ok {
 		shops = v.([]dao.Shop)
 	} else {
@@ -33,7 +40,7 @@ func (s *ServeBot) shopWithGeohash(geohash, distance string) ([]dao.Shop, error)
 			log.WithError(err).Error("Database error")
 			return nil, err
 		}
-		cache.SetDefault("<G>"+geohash, shops)
+		cache.SetDefault(geoLocPrefix+geohash, shops)
 	}
 
 	return shops, nil
@@ -42,7 +49,7 @@ func (s *ServeBot) shopWithGeohash(geohash, distance string) ([]dao.Shop, error)
 func (s *ServeBot) shopWithCoord(lat, long float64, distance string) ([]dao.Shop, error) {
 	var err error
 	geohash := ghash.EncodeWithPrecision(lat, long, GeohashPrecision)
-	v, ok := cache.Get("<G>" + geohash)
+	v, ok := cache.Get(geoLocPrefix + geohash)
 	var shops []dao.Shop
 	if ok {
 		shops = v.([]dao.Shop)
@@ -52,7 +59,7 @@ func (s *ServeBot) shopWithCoord(lat, long float64, distance string) ([]dao.Shop
 			log.WithError(err).Error("Database error")
 			return nil, err
 		}
-		cache.SetDefault("<G>"+geohash, shops)
+		cache.SetDefault(geoLocPrefix+geohash, shops)
 	}
 
 	return shops, nil
@@ -60,7 +67,7 @@ func (s *ServeBot) shopWithCoord(lat, long float64, distance string) ([]dao.Shop
 
 func (s *ServeBot) shopWithTags(keywords string) ([]dao.Shop, error) {
 	var err error
-	v, ok := cache.Get("<S>" + keywords)
+	v, ok := cache.Get(keywordPrefix + keywords)
 	var shops []dao.Shop
 	if ok {
 		shops = v.([]dao.Shop)
@@ -70,14 +77,14 @@ func (s *ServeBot) shopWithTags(keywords string) ([]dao.Shop, error) {
 			log.WithError(err).Error("Database error")
 			return nil, err
 		}
-		cache.SetDefault("<S>"+keywords, shops)
+		cache.SetDefault(keywordPrefix+keywords, shops)
 	}
 
 	return shops, nil
 }
 
 func (s *ServeBot) shopsWithKeywordSortByDist(keyword string, lat, long float64) ([]dao.Shop, error) {
-	v, ok := cache.Get(fmt.Sprintf("<KG>%s (%f %f)", keyword, lat, long))
+	v, ok := cache.Get(fmt.Sprintf(kwGeoPrefix+"%s (%f %f)", keyword, lat, long))
 	var shops []dao.Shop
 	var err error
 	if ok {
@@ -88,7 +95,7 @@ func (s *ServeBot) shopsWithKeywordSortByDist(keyword string, lat, long float64)
 			log.WithError(err).Error("Database error")
 			return nil, err
 		}
-		cache.SetDefault(fmt.Sprintf("<KG>%s (%f %f)", keyword, lat, long), shops)
+		cache.SetDefault(fmt.Sprintf(kwGeoPrefix+"%s (%f %f)", keyword, lat, long), shops)
 	}
 
 	return shops, nil
@@ -96,7 +103,7 @@ func (s *ServeBot) shopsWithKeywordSortByDist(keyword string, lat, long float64)
 
 func (s *ServeBot) advSearch(query string) ([]dao.Shop, error) {
 	var err error
-	v, ok := cache.Get("<A>" + query)
+	v, ok := cache.Get(advPrefix + query)
 	var shops []dao.Shop
 	if ok {
 		shops = v.([]dao.Shop)
@@ -106,7 +113,7 @@ func (s *ServeBot) advSearch(query string) ([]dao.Shop, error) {
 			log.WithError(err).Error("Database error")
 			return nil, err
 		}
-		cache.SetDefault("<A>"+query, shops)
+		cache.SetDefault(advPrefix+query, shops)
 	}
 
 	return shops, nil
