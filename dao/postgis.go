@@ -2,6 +2,7 @@ package dao
 
 import (
 	"context"
+	"github.com/jackc/pgtype"
 	log "github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
@@ -40,6 +41,35 @@ func (pg *PostGISBackend) CreateTable() error {
 		CONSTRAINT keyword_pkey PRIMARY KEY (word)
 		)`)
 	return err
+}
+
+// AllShops returns all records from the database
+func (pg *PostGISBackend) AllShops() ([]Shop, error) {
+	rows, err := pg.conn.Query(context.Background(),
+		`SELECT shop_id, name, type, coalesce(address, ''), coalesce(url,''), 
+		geog, district, string_to_array(coalesce(search_text, ''), ' ') FROM shops`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	shoplist := make([]Shop, 0)
+	for rows.Next() {
+		shop := Shop{}
+		var pos pgtype.Point
+		err := rows.Scan(&shop.ID, &shop.Name, &shop.Type, &shop.Address, &shop.URL, &pos, &shop.District, &shop.Tags)
+		if err != nil {
+			return nil, err
+		}
+		if pos.Status == pgtype.Present {
+			shop.Position.Lat = pos.P.X
+			shop.Position.Long = pos.P.Y
+		}
+		shoplist = append(shoplist, shop)
+	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+	return shoplist, nil
 }
 
 //NewPostGISBackend returns new PostGIS backend

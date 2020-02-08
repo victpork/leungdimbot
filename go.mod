@@ -20,6 +20,7 @@ require (
 	github.com/go-telegram-bot-api/telegram-bot-api v4.6.4+incompatible
 	github.com/golang/protobuf v1.3.2 // indirect
 	github.com/google/uuid v1.1.1 // indirect
+	github.com/jackc/pgtype v1.0.2
 	github.com/jackc/pgx/v4 v4.1.2
 	github.com/jmhodges/levigo v1.0.0 // indirect
 	github.com/mmcloughlin/geohash v0.9.0

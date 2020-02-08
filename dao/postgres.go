@@ -202,7 +202,8 @@ func (pg *PostgresBackend) Close() {
 // AllShops returns all records from the database
 func (pg *PostgresBackend) AllShops() ([]Shop, error) {
 	rows, err := pg.conn.Query(context.Background(),
-		"SELECT shop_id, name, type, coalesce(address, ''), coalesce(url,''), coalesce(geohash, ''), district FROM shops")
+		`SELECT shop_id, name, type, coalesce(address, ''), coalesce(url,''), 
+		coalesce(geohash, ''), district, string_to_array(coalesce(search_text, ''), ' ') FROM shops`)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +211,7 @@ func (pg *PostgresBackend) AllShops() ([]Shop, error) {
 	shoplist := make([]Shop, 0)
 	for rows.Next() {
 		shop := Shop{}
-		err := rows.Scan(&shop.ID, &shop.Name, &shop.Type, &shop.Address, &shop.URL, &shop.Geohash, &shop.District)
+		err := rows.Scan(&shop.ID, &shop.Name, &shop.Type, &shop.Address, &shop.URL, &shop.Geohash, &shop.District, &shop.Tags)
 		if err != nil {
 			return nil, err
 		}

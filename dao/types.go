@@ -2,6 +2,7 @@ package dao
 
 import (
 	"fmt"
+
 	ghash "github.com/mmcloughlin/geohash"
 )
 
@@ -87,4 +88,10 @@ type TaggedBackend interface {
 	Backend
 	UpdateTags() (int, error)
 	RefreshKeywords() (int, error)
+}
+
+//Exporter is for backend to export all data
+type Exporter interface {
+	AllShops() ([]Shop, error)
+	Close()
 }

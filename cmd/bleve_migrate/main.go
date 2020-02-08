@@ -1,8 +1,9 @@
 package main
 
 import (
-	"equa.link/wongdim/dao"
 	"fmt"
+
+	"equa.link/wongdim/dao"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
@@ -37,7 +38,17 @@ func main() {
 		viper.Get("db.user"),
 		viper.Get("db.password"),
 		viper.Get("db.db"))
-	db, err := dao.NewPostgresBackend(dbConnStr)
+	var db dao.Exporter
+	switch viper.Get("backendType") {
+	case dao.PostgreSQL:
+		db, err = dao.NewPostgresBackend(dbConnStr)
+	case dao.PostGIS:
+		db, err = dao.NewPostGISBackend(dbConnStr)
+	case dao.Bleve:
+		err = fmt.Errorf("Data source is already here?")
+	default:
+		err = fmt.Errorf("Unknown backend %s", viper.Get("backendType"))
+	}
 	if err != nil {
 		log.WithError(err).Fatal("Could not connect to database")
 	}
