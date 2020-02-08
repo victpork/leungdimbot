@@ -1,13 +1,14 @@
 package main
 
 import (
+	"fmt"
+	"io/ioutil"
+
 	"equa.link/wongdim"
 	"equa.link/wongdim/dao"
-	"fmt"
 	"github.com/orandin/lumberjackrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"io/ioutil"
 )
 
 const (
@@ -109,11 +110,19 @@ func main() {
 		log.WithError(err).Fatal("Cannot read help file")
 	}
 
+	mapService := viper.Get("geocode.service")
+	var mapOpt wongdim.Option
+	switch mapService {
+	case "google":
+		mapOpt = wongdim.WithGoogleMapAPIKey(viper.GetString("geocode.key"))
+	case "bing":
+		mapOpt = wongdim.WithBingMapAPIKey(viper.GetString("geocode.key"))
+	}
 	bot, err := wongdim.New(
 		beOptCfg,
 		wongdim.WithTelegramAPIKey(viper.GetString("tg.key"), viper.GetBool("tg.debug")),
 		wongdim.WithWebhookURL(viper.GetString("tg.serveURL")),
-		wongdim.WithMapAPIKey(viper.GetString("googlemap.key")),
+		mapOpt,
 		wongdim.WithHelpMsg(string(helpContent)),
 	)
 	if err != nil {

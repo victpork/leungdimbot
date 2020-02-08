@@ -2,23 +2,26 @@ package wongdim
 
 import (
 	"context"
-	"equa.link/wongdim/batch"
-	"equa.link/wongdim/dao"
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
-	ghash "github.com/mmcloughlin/geohash"
-	log "github.com/sirupsen/logrus"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"equa.link/wongdim/batch"
+	"equa.link/wongdim/batch/bingmap"
+	"equa.link/wongdim/batch/googlemap"
+	"equa.link/wongdim/dao"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+	ghash "github.com/mmcloughlin/geohash"
+	log "github.com/sirupsen/logrus"
 )
 
 // ServeBot is the bot construct for serving shops info
 type ServeBot struct {
 	bot       *tgbotapi.BotAPI
 	url       string
-	mapClient batch.GeocodeClient
+	mapClient MapClient
 	keyFile   string
 	certFile  string
 	da        dao.Backend
@@ -27,6 +30,10 @@ type ServeBot struct {
 
 // Option is a constructor argument for Retrievr
 type Option func(r *ServeBot) error
+
+type MapClient interface {
+	FillGeocode(context.Context, dao.Shop) (dao.Shop, error)
+}
 
 const (
 	//EntriesPerPage is number of entries per display in single message
@@ -67,11 +74,20 @@ func WithWebhookURL(url string) Option {
 	}
 }
 
-// WithMapAPIKey configures bot with Google Maps API key
-func WithMapAPIKey(key string) Option {
+// WithGoogleMapAPIKey configures bot with Google Maps API key
+func WithGoogleMapAPIKey(key string) Option {
 	return func(s *ServeBot) error {
 		var err error
-		s.mapClient, err = batch.NewGeocodeClient(key)
+		s.mapClient, err = googlemap.NewGMapClient(key)
+		return err
+	}
+}
+
+// WithBingMapAPIKey configures bot with Bing Maps API key
+func WithBingMapAPIKey(key string) Option {
+	return func(s *ServeBot) error {
+		var err error
+		s.mapClient = bingmap.NewBingMapClient(key)
 		return err
 	}
 }
