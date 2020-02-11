@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"time"
@@ -80,13 +81,14 @@ func (s Service) FillGeocode(ctx context.Context, shop dao.Shop) (dao.Shop, erro
 		}).Error("No address")
 		return shop, fmt.Errorf("No address")
 	}
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf(bingMapAPIURL, shop.Address, s.apiKey), nil)
+	url := fmt.Sprintf(bingMapAPIURL, url.QueryEscape(shop.Address), url.QueryEscape(s.apiKey))
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		log.WithError(err).WithFields(log.Fields{
 			"shopID":   shop.ID,
 			"shopName": shop.Name,
 			"address":  shop.Address,
-			"url":      fmt.Sprintf(bingMapAPIURL, shop.Address, s.apiKey),
+			"url":      url,
 		}).Error("Geocode create request failed")
 		return shop, err
 	}
@@ -97,7 +99,7 @@ func (s Service) FillGeocode(ctx context.Context, shop dao.Shop) (dao.Shop, erro
 			"shopID":   shop.ID,
 			"shopName": shop.Name,
 			"address":  shop.Address,
-			"url":      fmt.Sprintf(bingMapAPIURL, shop.Address, s.apiKey),
+			"url":      url,
 		}).Error("Connection to bing failed")
 		return shop, err
 	}
@@ -118,7 +120,7 @@ func (s Service) FillGeocode(ctx context.Context, shop dao.Shop) (dao.Shop, erro
 			"shopID":   shop.ID,
 			"shopName": shop.Name,
 			"address":  shop.Address,
-			"url":      fmt.Sprintf(bingMapAPIURL, shop.Address, s.apiKey),
+			"url":      url,
 			"json":     body,
 		}).Error("Result parse fail")
 		return shop, err
