@@ -1,11 +1,13 @@
 package dao
 
 import (
+	"bytes"
 	"context"
-	"github.com/jackc/pgtype"
-	log "github.com/sirupsen/logrus"
+	"encoding/binary"
 	"strconv"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -55,14 +57,27 @@ func (pg *PostGISBackend) AllShops() ([]Shop, error) {
 	shoplist := make([]Shop, 0)
 	for rows.Next() {
 		shop := Shop{}
-		var pos pgtype.Point
+		var pos []byte
 		err := rows.Scan(&shop.ID, &shop.Name, &shop.Type, &shop.Address, &shop.URL, &pos, &shop.District, &shop.Tags)
 		if err != nil {
 			return nil, err
 		}
-		if pos.Status == pgtype.Present {
-			shop.Position.Lat = pos.P.X
-			shop.Position.Long = pos.P.Y
+		if pos != nil {
+			r := bytes.NewReader(pos)
+			b, err := r.ReadByte()
+			if err != nil {
+				return nil, err
+			}
+			var bo binary.ByteOrder
+			if b == 0 {
+				bo = binary.BigEndian
+			} else {
+				bo = binary.LittleEndian
+			}
+			t := [2]float64{}
+			binary.Read(r, bo, &t)
+			shop.Position.Lat = t[1]
+			shop.Position.Long = t[0]
 		}
 		shoplist = append(shoplist, shop)
 	}

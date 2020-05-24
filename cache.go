@@ -1,12 +1,17 @@
 package wongdim
 
 import (
-	"equa.link/wongdim/dao"
+	"bytes"
+	"encoding/gob"
+	"errors"
 	"fmt"
+	"strconv"
+	"time"
+
+	"equa.link/wongdim/dao"
 	ghash "github.com/mmcloughlin/geohash"
 	gcache "github.com/patrickmn/go-cache"
 	log "github.com/sirupsen/logrus"
-	"time"
 )
 
 const (
@@ -14,16 +19,23 @@ const (
 	keywordPrefix = "<S>"
 	advPrefix     = "<A>"
 	kwGeoPrefix   = "<KG>"
+	adminPrefix   = "<admin>"
+
+	adminModeTimeout = time.Minute * 10
 )
 
 var (
 	cache     *gcache.Cache
 	districts map[string]struct{}
+	encoder   *gob.Encoder
+	encBuf    bytes.Buffer
 )
 
 func init() {
 	cache = gcache.New(10*time.Minute, 20*time.Minute)
 	districts = make(map[string]struct{})
+	encBuf = bytes.Buffer{}
+	encoder = gob.NewEncoder(&encBuf)
 }
 
 func (s *ServeBot) shopWithGeohash(geohash, distance string) ([]dao.Shop, error) {
@@ -134,4 +146,31 @@ func (s *ServeBot) isDistrict(d string) bool {
 		return true
 	}
 	return false
+}
+
+func (s *ServeBot) enterAdminMode(chatID int64, st state) {
+	cache.Set(adminPrefix+strconv.FormatInt(chatID, 16), st, adminModeTimeout)
+}
+
+func (s *ServeBot) adminMode(chatID int64, st state) {
+	cache.Set(adminPrefix+strconv.FormatInt(chatID, 16), st, adminModeTimeout)
+}
+
+func (s *ServeBot) isAdminMode(chatID int64) bool {
+	_, ok := cache.Get(adminPrefix + strconv.FormatInt(chatID, 16))
+	return ok
+}
+
+func (s *ServeBot) adminModeLastState(chatID int64) (state, error) {
+	cache.DeleteExpired()
+	st, ok := cache.Get(adminPrefix + strconv.FormatInt(chatID, 16))
+	if !ok {
+		return state{}, errors.New("Cannot recover previous state")
+	}
+
+	return st.(state), nil
+}
+
+func (s *ServeBot) exitAdminMode(chatID int64) {
+	cache.Delete(adminPrefix + strconv.FormatInt(chatID, 16))
 }

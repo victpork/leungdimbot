@@ -15,6 +15,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	ghash "github.com/mmcloughlin/geohash"
 	log "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 // ServeBot is the bot construct for serving shops info
@@ -31,6 +32,7 @@ type ServeBot struct {
 // Option is a constructor argument for Retrievr
 type Option func(r *ServeBot) error
 
+// MapClient for implementing API that find address and turn into WGS-84 coordinates
 type MapClient interface {
 	FillGeocode(context.Context, dao.Shop) (dao.Shop, error)
 }
@@ -97,8 +99,11 @@ func WithTelegramAPIKey(key string, debug bool) Option {
 	return func(s *ServeBot) error {
 		var err error
 		s.bot, err = tgbotapi.NewBotAPI(key)
+		if err != nil {
+			return err
+		}
 		s.bot.Debug = debug
-		return err
+		return nil
 	}
 }
 
@@ -162,10 +167,14 @@ func (r *ServeBot) listenForBatchReq() {
 		writer.Write([]byte("OK"))
 	})
 
+	var err error
 	if len(r.certFile) > 0 {
-		http.ListenAndServeTLS("0.0.0.0:443", r.certFile, r.keyFile, nil)
+		err = http.ListenAndServeTLS(viper.GetString("serviceAddr"), r.certFile, r.keyFile, nil)
 	} else {
-		http.ListenAndServe("0.0.0.0:80", nil)
+		err = http.ListenAndServe(viper.GetString("serviceAddr"), nil)
+	}
+	if err != nil {
+		log.WithError(err).Error("Cannot open port")
 	}
 }
 
@@ -195,7 +204,11 @@ func (r *ServeBot) Listen() error {
 
 func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 	for update := range updates {
-
+		if update.Message != nil && r.isAdminMode(update.Message.Chat.ID) ||
+			update.CallbackQuery != nil && r.isAdminMode(update.CallbackQuery.Message.Chat.ID) {
+			r.handleAdminFunc(update)
+			continue
+		}
 		switch {
 		case update.InlineQuery != nil:
 			// Inline query
@@ -381,6 +394,9 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 					if update.Message.Text == "/start" {
 						log.Info("New joiner")
 					}
+				} else if update.Message.Text == "/admin" {
+					r.adminChallenge(update)
+					continue
 				} else {
 					var shops []dao.Shop
 					var err error
@@ -543,7 +559,7 @@ func shopListMessage(shops []dao.Shop, key string, limit, offset int) (string, t
 }
 
 //SendSingleShop sends single shop data to Chat, along with
-// coordinates
+//coordinates
 func (r ServeBot) SendSingleShop(chatID int64, shop dao.Shop) error {
 	if shop.HasPhyLoc() {
 		lat, long := shop.ToCoord()

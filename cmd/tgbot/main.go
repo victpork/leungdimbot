@@ -22,6 +22,8 @@ func init() {
 	viper.SetDefault("tg.serveURL", "localhost")
 	viper.SetDefault("backendType", dao.PostgreSQL)
 
+	viper.SetDefault("logPath", "/wongdim/log/access.log")
+
 	viper.SetDefault("db.host", "0.0.0.0")
 	viper.SetDefault("db.port", 6543)
 	viper.SetDefault("db.user", "wongdim")
@@ -32,9 +34,23 @@ func init() {
 
 	viper.SetDefault("helpfile", "/wongdim/help.txt")
 
+}
+
+func main() {
+	viper.SetConfigName("config")
+	viper.AddConfigPath("/etc/wongdim/")
+	viper.AddConfigPath(".")
+	viper.AutomaticEnv()
+	viper.SetEnvPrefix("WDIM")
+
+	err := viper.ReadInConfig() // Find and read the config file
+	if err != nil {             // Handle errors reading the config file
+		log.WithError(err).Error("Config file not found")
+	}
+
 	hook, err := lumberjackrus.NewHook(
 		&lumberjackrus.LogFile{
-			Filename:   "/wongdim/log/access.log",
+			Filename:   viper.GetString("logPath"),
 			MaxSize:    100,
 			MaxBackups: 10,
 			MaxAge:     1,
@@ -50,19 +66,6 @@ func init() {
 		log.WithError(err).Error("Cannot create file log hook")
 	} else {
 		log.AddHook(hook)
-	}
-}
-
-func main() {
-	viper.SetConfigName("config")
-	viper.AddConfigPath("/etc/wongdim/")
-	viper.AddConfigPath(".")
-	viper.AutomaticEnv()
-	viper.SetEnvPrefix("WDIM")
-
-	err := viper.ReadInConfig() // Find and read the config file
-	if err != nil {             // Handle errors reading the config file
-		log.WithError(err).Error("Config file not found")
 	}
 
 	var beOptCfg wongdim.Option
