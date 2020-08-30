@@ -2,10 +2,11 @@ package dao
 
 import (
 	"context"
-	"github.com/jackc/pgtype"
-	log "github.com/sirupsen/logrus"
 	"strconv"
 	"strings"
+
+	"github.com/jackc/pgtype"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -80,10 +81,10 @@ func NewPostGISBackend(connStr string) (*PostGISBackend, error) {
 
 //ShopMissingInfo get data with missing info
 func (pg *PostGISBackend) ShopMissingInfo() ([]Shop, error) {
-	exTypes := []string{nonPhyStore, closedStore}
+	exTypes := []string{nonPhyStore}
 	rows, err := pg.conn.Query(context.Background(),
 		`SELECT shop_id, name, district, coalesce(address, ''), 
-		 type FROM shops WHERE geog IS NULL and district <> all($1)`, exTypes)
+		 type FROM shops WHERE geog IS NULL and district <> all($1) and status <> $2`, exTypes, closedStore)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +133,7 @@ func (pg *PostGISBackend) NearestShops(lat, long float64, distance string) ([]Sh
 		coalesce(url, ''), district, ST_X(geog::geometry) long, ST_Y(geog::geometry) lat,
 		round(ST_Distance(geog, ST_MakePoint($1, $2)::geography, false)) as dist, coalesce(notes, '')
 		FROM shops
-		WHERE ST_DWithin(geog, ST_MakePoint($1, $2), $3, false) and district <> $4 order by dist`,
+		WHERE ST_DWithin(geog, ST_MakePoint($1, $2), $3, false) and status <> $4 order by dist`,
 		long, lat, d, closedStore)
 
 	if err != nil {
@@ -171,9 +172,9 @@ func (pg *PostGISBackend) ShopsWithKeyword(keywords string) ([]Shop, error) {
 	rows, err := pg.conn.Query(context.Background(),
 		`SELECT shop_id, name, type, coalesce(address, ''), 
 	coalesce(url,''), coalesce(ST_X(geog::geometry), 0) long, coalesce(ST_Y(geog::geometry), 0) lat, district, coalesce(notes, '') 
-	FROM shops WHERE (to_tsvector('cuisine', search_text || ' ' || district) @@ plainto_tsquery('cuisine_syn', $1) OR name ILIKE '%'||$1||'%') 
+	FROM shops WHERE (to_tsvector('cuisine', search_text || ' ' || district) @@ plainto_tsquery('cuisine_syn', $1) AND status <> $2 OR name ILIKE '%'||$1||'%') 
 	and (address IS NOT NULL OR url IS NOT NULL) order by random()`,
-		keywords)
+		keywords, closedStore)
 
 	if err != nil {
 		return nil, err
@@ -204,10 +205,11 @@ func (pg *PostGISBackend) ShopsWithKeywordSortByDist(keywords string, lat, long 
 	coalesce(url,''), coalesce(ST_X(geog::geometry), 0) long, coalesce(ST_Y(geog::geometry), 0) lat, 
 	district, coalesce(notes, '') 
 	FROM shops WHERE (to_tsvector('cuisine', search_text || ' ' || district) @@ plainto_tsquery('cuisine_syn', $1) 
+	AND status <> $4
 	OR name ILIKE '%'||$1||'%') 
 	and (address IS NOT NULL OR url IS NOT NULL)
 	order by ST_MakePoint($2, $3) <-> geog LIMIT 30`,
-		keywords, long, lat)
+		keywords, long, lat, closedStore)
 
 	if err != nil {
 		return nil, err

@@ -3,12 +3,13 @@ package dao
 import (
 	"context"
 	"fmt"
+	"strings"
+	"unicode/utf8"
+
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	ghash "github.com/mmcloughlin/geohash"
 	log "github.com/sirupsen/logrus"
-	"strings"
-	"unicode/utf8"
 )
 
 const (
@@ -58,10 +59,10 @@ func (pg *PostgresBackend) CreateTable() error {
 
 //ShopMissingInfo get data with missing info
 func (pg *PostgresBackend) ShopMissingInfo() ([]Shop, error) {
-	exTypes := []string{nonPhyStore, closedStore}
+	exTypes := []string{nonPhyStore}
 	rows, err := pg.conn.Query(context.Background(),
 		`SELECT shop_id, name, district, coalesce(address, ''), coalesce(geohash, ''),
-		 type FROM shops WHERE geohash IS NULL and district <> all($1)`, exTypes)
+		 type FROM shops WHERE geohash IS NULL and district <> all($1) and status <> $2`, exTypes, closedStore)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +102,7 @@ func (pg *PostgresBackend) UpdateShopInfo(shops []Shop) error {
 func (pg *PostgresBackend) NearestShops(lat, long float64, distance string) ([]Shop, error) {
 	gHashArr := area(ghash.EncodeWithPrecision(lat, long, 7), distance)
 	rows, err := pg.conn.Query(context.Background(),
-		"SELECT shop_id, name, type, coalesce(address, ''), coalesce(url,''), geohash, district FROM shops WHERE LEFT(geohash, 7) = ANY($1) and district <> $2 order by random()",
+		"SELECT shop_id, name, type, coalesce(address, ''), coalesce(url,''), geohash, district FROM shops WHERE LEFT(geohash, 7) = ANY($1) and status <> $2 order by random()",
 		gHashArr, closedStore)
 	if err != nil {
 		return nil, err
@@ -122,8 +123,8 @@ func (pg *PostgresBackend) ShopsWithKeyword(keywords string) ([]Shop, error) {
 		`SELECT shop_id, name, type, coalesce(address, ''), 
 	coalesce(url,''), coalesce(geohash, ''), district, coalesce(notes, '') 
 	FROM shops WHERE (to_tsvector('cuisine', search_text || ' ' || district) @@ plainto_tsquery('cuisine_syn', $1) OR name ILIKE '%'||$1||'%') 
-	and (address IS NOT NULL OR url IS NOT NULL) order by random()`,
-		keywords)
+	and (address IS NOT NULL OR url IS NOT NULL) and status <> $2 order by random()`,
+		keywords, closedStore)
 
 	if err != nil {
 		return nil, err
@@ -239,7 +240,7 @@ func (pg *PostgresBackend) AdvQuery(query string) ([]Shop, error) {
 	rows, err := pg.conn.Query(context.Background(),
 		`SELECT shop_id, name, type, coalesce(address, ''), 
 		coalesce(url,''), coalesce(geohash, ''), district, coalesce(notes, '') from shops 
-	    where to_tsvector('cuisine', search_text || ' ' || district) @@ websearch_to_tsquery('cuisine_syn', $1) order by random()`, query)
+	    where to_tsvector('cuisine', search_text || ' ' || district) @@ websearch_to_tsquery('cuisine_syn', $1) and status <> $2 order by random()`, query, closedStore)
 
 	if err != nil {
 		return nil, err
@@ -318,8 +319,8 @@ func (pg *PostgresBackend) ShopsWithKeywordSortByDist(keywords string, lat, long
 		`SELECT shop_id, name, type, coalesce(address, ''), 
 	coalesce(url,''), coalesce(geohash, ''), district, coalesce(notes, '') 
 	FROM shops WHERE (to_tsvector('cuisine', search_text || ' ' || district) @@ plainto_tsquery('cuisine_syn', $1) OR name ILIKE '%'||$1||'%') 
-	and (address IS NOT NULL OR url IS NOT NULL) order by levenshtein_less_equal($2, geohash, 4)`,
-		keywords, gHash)
+	and (address IS NOT NULL OR url IS NOT NULL) and status <> $3 order by levenshtein_less_equal($2, geohash, 4)`,
+		keywords, gHash, closedStore)
 
 	if err != nil {
 		return nil, err
