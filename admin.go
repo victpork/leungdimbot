@@ -35,6 +35,7 @@ const (
 	editLocation     = "ELoc"
 	editURL          = "EURL"
 	editKeywords     = "EKey"
+	editStatus       = "EStatus"
 )
 
 type actionCode int
@@ -118,7 +119,16 @@ func (r *ServeBot) handleAdminFunc(u tgbotapi.Update) {
 		case logoutCallback:
 			r.SendMsg(chatID, "已登出")
 			r.exitAdminMode(chatID)
+			log.WithFields(log.Fields{
+				"userID":   u.Message.From.ID,
+				"username": u.Message.From.UserName,
+			}).Print("User logout")
+
+		case editStatus:
+			//Switch shop status
+
 		}
+		r.bot.AnswerCallbackQuery(tgbotapi.NewCallback(u.CallbackQuery.ID, u.CallbackQuery.Data))
 	} else if u.Message != nil && u.Message.Text == "/logout" {
 		//Logout action
 		r.SendMsg(u.Message.Chat.ID, "已登出")
@@ -132,6 +142,15 @@ func (r *ServeBot) handleAdminFunc(u tgbotapi.Update) {
 			return
 		}
 		switch lastState.Action {
+		case editSearch:
+			shops, err := r.da.ShopsWithKeyword(u.Message.Text)
+			if err != nil {
+				r.SendMsg(u.Message.Chat.ID, "Not found")
+			}
+			err = r.SendList(u.Message.Chat.ID, shops, simpleSearchPrefix+u.Message.Text, 10, 0)
+			if err != nil {
+				log.WithError(err).Print("Cannot display shop list in admin mode")
+			}
 		case newShopName:
 			lastState.SelectedShop.Name = u.Message.Text
 			lastState.Action = newShopType
@@ -180,4 +199,31 @@ func (r *ServeBot) handleAdminFunc(u tgbotapi.Update) {
 		}
 	}
 
+}
+
+//SendSingleShopAdmin does what similar to SendSingleShop(), but with admin interface instead
+func (r ServeBot) SendSingleShopAdmin(chatID int64, shop dao.Shop) error {
+	if shop.HasPhyLoc() {
+		lat, long := shop.ToCoord()
+		venue := tgbotapi.NewVenue(chatID, fmt.Sprintf("%s-%s (%s)\n %s", shop.Name, shop.District, shop.Type, shop.URL), shop.Address, lat, long)
+
+		var row []tgbotapi.InlineKeyboardButton
+		row = make([]tgbotapi.InlineKeyboardButton, 4)
+		row[0] = tgbotapi.NewInlineKeyboardButtonData("更改店名", editName)
+		row[1] = tgbotapi.NewInlineKeyboardButtonData("變更為結業", editStatus)
+		row[2] = tgbotapi.NewInlineKeyboardButtonData("更改地址", editAddress)
+		row[3] = tgbotapi.NewInlineKeyboardButtonData("更改座標", editLocation)
+		venue.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(row)
+		_, err := r.bot.Send(venue)
+		if err != nil {
+			return fmt.Errorf("ChatID %v cannot be sent: %v", chatID, err)
+		}
+	} else {
+		//non-physical store
+		r.SendMsg(chatID, fmt.Sprintf("*%s* (%s) - \n[連結](%s)", shop.Name, shop.Type, shop.URL))
+	}
+	if shop.Notes != "" {
+		r.SendMsg(chatID, fmt.Sprintf("📝備註: %s", shop.Notes))
+	}
+	return nil
 }
