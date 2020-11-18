@@ -78,14 +78,21 @@ func (r ServeBot) adminChallenge(u tgbotapi.Update) {
 func (r ServeBot) SendSingleShopEdit(chatID int64, shop dao.Shop) error {
 	if shop.HasPhyLoc() {
 		lat, long := shop.ToCoord()
-		p := tgbotapi.NewVenue(chatID, fmt.Sprintf("%s-%s (%s)\n%s\n📝%s\n關鍵字:%s", shop.Name, shop.District, shop.Type, shop.URL, shop.Notes, shop.Tags), shop.Address, lat, long)
+		p := tgbotapi.NewVenue(chatID, fmt.Sprintf("%s-%s (%s)", shop.Name, shop.District, shop.Type), shop.Address, lat, long)
 		row := tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("名字", editName+strconv.Itoa(shop.ID)),
-			tgbotapi.NewInlineKeyboardButtonData("類型", "EType"+strconv.Itoa(shop.ID)),
-			tgbotapi.NewInlineKeyboardButtonData("地區", "EDist"+strconv.Itoa(shop.ID)),
+			tgbotapi.NewInlineKeyboardButtonData("更改名字", editName+strconv.Itoa(shop.ID)),
+			tgbotapi.NewInlineKeyboardButtonData("更改類型", editType+strconv.Itoa(shop.ID)),
+			tgbotapi.NewInlineKeyboardButtonData("更改地區", editDistrict+strconv.Itoa(shop.ID)),
 		)
-		row2 := tgbotapi.NewInlineKeyboardRow(tgbotapi.NewInlineKeyboardButtonData("刪除", "Del"+strconv.Itoa(shop.ID)))
-		p.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(row, row2)
+		row2 := tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("更改地址", editAddress+strconv.Itoa(shop.ID)),
+			tgbotapi.NewInlineKeyboardButtonData("結業", editStatus+strconv.Itoa(shop.ID)),
+			tgbotapi.NewInlineKeyboardButtonData("更改座標", editLocation+strconv.Itoa(shop.ID)),
+		)
+		row3 := tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("關鍵字", editKeywords+strconv.Itoa(shop.ID)),
+		)
+		p.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(row, row2, row3)
 		_, err := r.bot.Send(p)
 		if err != nil {
 			return err
@@ -126,7 +133,22 @@ func (r *ServeBot) handleAdminFunc(u tgbotapi.Update) {
 
 		case editStatus:
 			//Switch shop status
-
+		default:
+			lastState, err := r.adminModeLastState(chatID)
+			if err != nil {
+				log.WithError(err).Print("Error when trying to retrieve last state")
+				return
+			}
+			switch lastState.Action {
+			case editSearch:
+				//Handle pagination request
+				if u.CallbackQuery.Message != nil {
+					err = r.handleCallbackData(u.CallbackQuery)
+					if err != nil {
+						return
+					}
+				}
+			}
 		}
 		r.bot.AnswerCallbackQuery(tgbotapi.NewCallback(u.CallbackQuery.ID, u.CallbackQuery.Data))
 	} else if u.Message != nil && u.Message.Text == "/logout" {
@@ -145,9 +167,15 @@ func (r *ServeBot) handleAdminFunc(u tgbotapi.Update) {
 		case editSearch:
 			shops, err := r.da.ShopsWithKeyword(u.Message.Text)
 			if err != nil {
+				r.SendMsg(u.Message.Chat.ID, "Error")
+				log.WithError(err).Print("Error when loading shops")
+			}
+
+			if len(shops) == 0 {
 				r.SendMsg(u.Message.Chat.ID, "Not found")
 			}
-			err = r.SendList(u.Message.Chat.ID, shops, simpleSearchPrefix+u.Message.Text, 10, 0)
+
+			err = r.SendList(u.Message.Chat.ID, shops, simpleSearchPrefix+u.Message.Text, EntriesPerPage, 0)
 			if err != nil {
 				log.WithError(err).Print("Cannot display shop list in admin mode")
 			}
@@ -199,31 +227,4 @@ func (r *ServeBot) handleAdminFunc(u tgbotapi.Update) {
 		}
 	}
 
-}
-
-//SendSingleShopAdmin does what similar to SendSingleShop(), but with admin interface instead
-func (r ServeBot) SendSingleShopAdmin(chatID int64, shop dao.Shop) error {
-	if shop.HasPhyLoc() {
-		lat, long := shop.ToCoord()
-		venue := tgbotapi.NewVenue(chatID, fmt.Sprintf("%s-%s (%s)\n %s", shop.Name, shop.District, shop.Type, shop.URL), shop.Address, lat, long)
-
-		var row []tgbotapi.InlineKeyboardButton
-		row = make([]tgbotapi.InlineKeyboardButton, 4)
-		row[0] = tgbotapi.NewInlineKeyboardButtonData("更改店名", editName)
-		row[1] = tgbotapi.NewInlineKeyboardButtonData("變更為結業", editStatus)
-		row[2] = tgbotapi.NewInlineKeyboardButtonData("更改地址", editAddress)
-		row[3] = tgbotapi.NewInlineKeyboardButtonData("更改座標", editLocation)
-		venue.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(row)
-		_, err := r.bot.Send(venue)
-		if err != nil {
-			return fmt.Errorf("ChatID %v cannot be sent: %v", chatID, err)
-		}
-	} else {
-		//non-physical store
-		r.SendMsg(chatID, fmt.Sprintf("*%s* (%s) - \n[連結](%s)", shop.Name, shop.Type, shop.URL))
-	}
-	if shop.Notes != "" {
-		r.SendMsg(chatID, fmt.Sprintf("📝備註: %s", shop.Notes))
-	}
-	return nil
 }

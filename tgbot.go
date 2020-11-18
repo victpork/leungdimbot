@@ -48,6 +48,8 @@ const (
 	geoSearchPrefix    = "<G>"
 	simpleSearchPrefix = "<S>"
 	advSearchPrefix    = "<A>"
+
+	pagingNOOP = "---"
 )
 
 // New return new instance of ServeBot
@@ -305,7 +307,7 @@ func (r *ServeBot) process(updates tgbotapi.UpdatesChannel) {
 		case update.CallbackQuery != nil:
 			//When user click one of the inline button in message in direct chat
 			if update.CallbackQuery.Message != nil {
-				if update.CallbackQuery.Data == "---" {
+				if update.CallbackQuery.Data == pagingNOOP {
 					r.bot.AnswerCallbackQuery(tgbotapi.NewCallback(update.CallbackQuery.ID, update.CallbackQuery.Data))
 					continue
 				}
@@ -542,12 +544,12 @@ func shopListMessage(shops []dao.Shop, key string, limit, offset int) (string, t
 	if offset > 0 {
 		pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData("⏮️", fmt.Sprintf("P%d||%s", max(0, offset-limit), key)))
 		//Insert page number
-		pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData(pageInd, "---"))
+		pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData(pageInd, pagingNOOP))
 	}
 	if offset+EntriesPerPage < len(shops) {
 		if len(pageControl) == 0 {
 			//Insert page number
-			pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData(pageInd, "---"))
+			pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData(pageInd, pagingNOOP))
 		}
 		pageControl = append(pageControl, tgbotapi.NewInlineKeyboardButtonData("⏭️", fmt.Sprintf("P%d||%s", min(len(shops), offset+limit), key)))
 	}
@@ -582,6 +584,71 @@ func (r ServeBot) SendSingleShop(chatID int64, shop dao.Shop) error {
 	if shop.Notes != "" {
 		r.SendMsg(chatID, fmt.Sprintf("📝備註: %s", shop.Notes))
 	}
+	return nil
+}
+
+func (r ServeBot) handleCallbackData(cbq *tgbotapi.CallbackQuery) error {
+	if cbq.Data == pagingNOOP {
+		r.bot.AnswerCallbackQuery(tgbotapi.NewCallback(cbq.ID, cbq.Data))
+		return nil
+	}
+	if cbq.Data[0] == 'P' {
+		//Jump to another page
+		pageInfo := strings.Split(cbq.Data[1:], "||")
+		var shops []dao.Shop
+		offset, err := strconv.Atoi(pageInfo[0])
+		if strings.HasPrefix(pageInfo[1], geoSearchPrefix) {
+			shops, err = r.shopWithGeohash(strings.TrimPrefix(pageInfo[1], geoSearchPrefix), DistanceLimit)
+		} else if strings.HasPrefix(pageInfo[1], advSearchPrefix) {
+			shops, err = r.advSearch(strings.TrimPrefix(pageInfo[1], advSearchPrefix))
+		} else {
+			shops, err = r.shopWithTags(strings.TrimPrefix(pageInfo[1], simpleSearchPrefix))
+		}
+		if err != nil {
+			log.WithError(err).Error("Database query error")
+		}
+		if len(shops) == 0 {
+			log.WithField("query", pageInfo[1]).Error("Cache hit failed")
+			r.SendMsg(cbq.Message.Chat.ID, "系統錯誤，請稍後重試")
+			r.bot.AnswerCallbackQuery(tgbotapi.NewCallback(cbq.ID, cbq.Data))
+			return err
+		}
+		err = r.RefreshList(cbq.Message.Chat.ID,
+			cbq.Message.MessageID,
+			shops,
+			strings.Join(pageInfo[1:], "||"),
+			EntriesPerPage, offset,
+		)
+		if err != nil {
+			log.WithError(err).Error("Telegram error")
+		}
+	} else {
+		//Pick an item and post its detail, behaves same as picking
+		//single item
+		itemID, err := strconv.Atoi(cbq.Data)
+		if err != nil {
+			log.WithError(err).WithField("callbackData", cbq.Data).Printf("Unexpected callback data")
+		} else {
+			result, err := r.da.ShopByID(itemID)
+			log.WithFields(log.Fields{
+				"shopID":   itemID,
+				"shopName": result.Name,
+			}).Info("Single shop selected")
+			if err != nil {
+				r.SendMsg(cbq.Message.Chat.ID, "資料庫錯誤! 找不到店舖")
+				log.WithFields(log.Fields{
+					"shopID": itemID,
+				}).WithError(err).Error("Shop not found")
+			} else {
+				if r.isAdminMode(cbq.Message.Chat.ID) {
+					r.SendSingleShopEdit(cbq.Message.Chat.ID, result)
+				} else {
+					r.SendSingleShop(cbq.Message.Chat.ID, result)
+				}
+			}
+		}
+	}
+	r.bot.AnswerCallbackQuery(tgbotapi.NewCallback(cbq.ID, cbq.Data))
 	return nil
 }
 

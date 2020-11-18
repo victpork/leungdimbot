@@ -9,7 +9,7 @@ A bot that helps to serve shops in Telegram
 - Docker + Docker Compose (Recommended)
 - PostgreSQL (9+)
 - Reverse/TLS Proxy for encryption (Recommended)
-- Google Map Geocode API key
+- Google/Bing Map Geocode API key
 - Telegram bot API key
 
 ### Installation
