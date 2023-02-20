@@ -1,5 +1,5 @@
 # WongDimBot
-A bot that helps to serve shops in Telegram
+A bot that helps to recommend restaurants and shops in Telegram
 
 ### Features
 - Search shops via Telegram (keyword/location based)
